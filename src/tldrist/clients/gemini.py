@@ -53,11 +53,11 @@ EXTRACT_FIGURE_PROMPT = (
     "Look through this paper and identify the single most important figure, "
     "chart, or diagram that best represents the paper's key contribution "
     "or findings.\n\n"
-    "Respond with ONLY a JSON object in this exact format, no other text:\n"
+    "Respond with ONLY a JSON object in this format:\n"
     '{"figure_number": "1", "page_number": 3, '
     '"description": "Brief description of what the figure shows", '
     '"reason": "Why this figure is the most important"}\n\n'
-    "If there are no figures or you cannot identify one, respond with:\n"
+    "If there are no figures, respond with:\n"
     '{"figure_number": null, "page_number": null, '
     '"description": null, "reason": "No figures found"}'
 )

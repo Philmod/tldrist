@@ -8,11 +8,11 @@ resource "google_artifact_registry_repository" "tldrist" {
   depends_on = [google_project_service.apis]
 }
 
-# Allow Cloud Build to push images
-resource "google_artifact_registry_repository_iam_member" "cloudbuild_writer" {
+# Allow the tldrist service account to push images
+resource "google_artifact_registry_repository_iam_member" "tldrist_writer" {
   project    = var.project_id
   location   = var.region
   repository = google_artifact_registry_repository.tldrist.name
   role       = "roles/artifactregistry.writer"
-  member     = "serviceAccount:${var.project_id}@cloudbuild.gserviceaccount.com"
+  member     = "serviceAccount:${google_service_account.tldrist.email}"
 }
