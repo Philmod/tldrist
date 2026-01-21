@@ -89,9 +89,10 @@ resource "google_cloud_run_v2_service" "tldrist" {
         http_get {
           path = "/api/v1/health"
         }
-        initial_delay_seconds = 5
+        initial_delay_seconds = 10
         period_seconds        = 10
-        failure_threshold     = 3
+        failure_threshold     = 6
+        timeout_seconds       = 5
       }
     }
 
