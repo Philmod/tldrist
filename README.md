@@ -1,13 +1,14 @@
-# TLDRist
+# TL;DRist
 
-Weekly digest of Todoist Read list articles summarized with Gemini.
+Daily digest of Todoist Read list articles summarized with Gemini.
 
 ## Features
 
 - Fetches articles from your Todoist "Read" project
 - Extracts content using trafilatura and readability-lxml
 - Generates summaries using Vertex AI Gemini 2.5 Pro
-- Sends a weekly digest email via Gmail SMTP
+- Supports arXiv papers with PDF summarization and figure extraction
+- Sends a daily digest email via Gmail SMTP
 - Updates Todoist tasks with their summaries
 
 ## Setup
@@ -34,6 +35,7 @@ export TLDRIST_GCP_PROJECT_ID=your-project
 export TLDRIST_GCP_REGION=europe-west1
 export TLDRIST_GMAIL_ADDRESS=your-gmail@gmail.com
 export TLDRIST_RECIPIENT_EMAIL=you@example.com
+export TLDRIST_TODOIST_PROJECT_ID=your-project-id
 
 # Run locally
 uv run uvicorn tldrist.main:app --reload
@@ -67,6 +69,7 @@ Triggers the article summarization workflow.
 
 Query Parameters:
 - `dry_run` (optional, default: false): Run without sending email or updating tasks
+- `limit` (optional): Maximum number of articles to process
 
 ### GET /api/v1/health
 
