@@ -91,13 +91,13 @@ resource "google_cloud_run_v2_service" "tldrist" {
 # Cloud Scheduler job - runs every Monday at 7am Paris time
 resource "google_cloud_scheduler_job" "weekly_digest" {
   name        = "tldrist-weekly-digest"
-  description = "Trigger TL;DRist weekly digest every Monday at 7am"
-  schedule    = "0 7 * * 1"
+  description = "Trigger TL;DRist weekly digest every day at 7am"
+  schedule    = "0 7 * * *"
   time_zone   = var.scheduler_timezone
 
   http_target {
     http_method = "POST"
-    uri         = "${google_cloud_run_v2_service.tldrist.uri}/api/v1/summarize"
+    uri         = "${google_cloud_run_v2_service.tldrist.uri}/api/v1/summarize?limit=${var.scheduler_article_limit}"
 
     oidc_token {
       service_account_email = google_service_account.scheduler.email
