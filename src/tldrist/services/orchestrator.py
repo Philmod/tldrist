@@ -70,6 +70,13 @@ class Orchestrator:
             subject, html = await self._digest.compose_digest([])
             if not dry_run:
                 self._gmail.send_email(self._recipient_email, subject, html)
+            else:
+                logger.info("Dry run - generated email subject", subject=subject)
+                print("\n" + "=" * 60)
+                print("GENERATED HTML EMAIL:")
+                print("=" * 60)
+                print(html)
+                print("=" * 60 + "\n")
             return OrchestrationResult(
                 tasks_found=0,
                 articles_processed=0,
@@ -122,7 +129,12 @@ class Orchestrator:
                 failed=tasks_update_failed,
             )
         else:
-            logger.info("Dry run - skipping email and task updates")
+            logger.info("Dry run - generated email subject", subject=subject)
+            print("\n" + "=" * 60)
+            print("GENERATED HTML EMAIL:")
+            print("=" * 60)
+            print(html)
+            print("=" * 60 + "\n")
 
         return OrchestrationResult(
             tasks_found=len(tasks_with_urls),

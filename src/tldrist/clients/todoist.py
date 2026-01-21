@@ -1,4 +1,4 @@
-"""Todoist REST API v2 client for TLDRist."""
+"""Todoist REST API v1 client for TLDRist."""
 
 import re
 from dataclasses import dataclass
@@ -9,7 +9,7 @@ from tldrist.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-TODOIST_API_BASE = "https://api.todoist.com/rest/v2"
+TODOIST_API_BASE = "https://api.todoist.com/api/v1"
 
 URL_PATTERN = re.compile(r"https?://[^\s<>\[\]()]+")
 
@@ -43,7 +43,7 @@ class TodoistTask:
 
 
 class TodoistClient:
-    """Client for interacting with the Todoist REST API v2."""
+    """Client for interacting with the Todoist REST API v1."""
 
     def __init__(self, token: str) -> None:
         self._token = token
@@ -76,7 +76,9 @@ class TodoistClient:
         response = await self._client.get("/tasks", params={"project_id": project_id})
         response.raise_for_status()
         data = response.json()
-        tasks = [TodoistTask.from_api_response(t) for t in data]
+        # API v1 wraps results in a "results" array
+        results = data.get("results", [])
+        tasks = [TodoistTask.from_api_response(t) for t in results]
         logger.info("Found tasks", count=len(tasks))
         return tasks
 

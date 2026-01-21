@@ -62,21 +62,24 @@ class TestTodoistClient:
     @respx.mock
     async def test_get_tasks(self, client: TodoistClient) -> None:
         """Should fetch tasks for a project."""
-        respx.get("https://api.todoist.com/rest/v2/tasks").mock(
+        respx.get("https://api.todoist.com/api/v1/tasks").mock(
             return_value=Response(
                 200,
-                json=[
-                    {
-                        "id": "task1",
-                        "content": "https://example.com/article1",
-                        "description": "",
-                    },
-                    {
-                        "id": "task2",
-                        "content": "https://example.com/article2",
-                        "description": "existing desc",
-                    },
-                ],
+                json={
+                    "results": [
+                        {
+                            "id": "task1",
+                            "content": "https://example.com/article1",
+                            "description": "",
+                        },
+                        {
+                            "id": "task2",
+                            "content": "https://example.com/article2",
+                            "description": "existing desc",
+                        },
+                    ],
+                    "next_cursor": None,
+                },
             )
         )
 
@@ -91,7 +94,7 @@ class TestTodoistClient:
         """Should update task description."""
         import json
 
-        route = respx.post("https://api.todoist.com/rest/v2/tasks/task-123").mock(
+        route = respx.post("https://api.todoist.com/api/v1/tasks/task-123").mock(
             return_value=Response(200, json={})
         )
 

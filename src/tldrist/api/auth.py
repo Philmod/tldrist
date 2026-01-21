@@ -1,9 +1,12 @@
 """Authentication utilities for API endpoints."""
 
+import os
+
 from fastapi import Header, HTTPException, status
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 
+from tldrist.config import get_settings
 from tldrist.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -23,6 +26,14 @@ async def verify_oidc_token(
     Raises:
         HTTPException: If the token is missing or invalid.
     """
+    settings = get_settings()
+
+    # Safety: Never skip auth in Cloud Run (K_SERVICE is always set by Cloud Run)
+    is_cloud_run = os.environ.get("K_SERVICE") is not None
+    if settings.skip_auth and not is_cloud_run:
+        logger.warning("Skipping auth (local development mode)")
+        return
+
     if not authorization:
         logger.warning("Missing authorization header")
         raise HTTPException(

@@ -9,7 +9,7 @@ from tldrist.clients.article import ArticleFetcher
 from tldrist.clients.gemini import GeminiClient
 from tldrist.clients.gmail import GmailClient
 from tldrist.clients.todoist import TodoistClient
-from tldrist.config import get_secrets, get_settings
+from tldrist.config import get_settings
 from tldrist.services.orchestrator import Orchestrator
 from tldrist.utils.logging import get_logger
 
@@ -60,9 +60,8 @@ async def summarize(
     logger.info("Summarize endpoint called", dry_run=dry_run)
 
     settings = get_settings()
-    secrets = get_secrets()
 
-    async with TodoistClient(secrets.todoist_token) as todoist:
+    async with TodoistClient(settings.todoist_token) as todoist:
         async with ArticleFetcher() as fetcher:
             async with GeminiClient(
                 project_id=settings.gcp_project_id,
@@ -70,7 +69,7 @@ async def summarize(
             ) as gemini:
                 async with GmailClient(
                     gmail_address=settings.gmail_address,
-                    app_password=secrets.gmail_app_password,
+                    app_password=settings.gmail_app_password,
                 ) as gmail:
                     orchestrator = Orchestrator(
                         todoist_client=todoist,

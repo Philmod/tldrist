@@ -11,7 +11,6 @@ dependencies = [
     "trafilatura>=2.0.0",
     "readability-lxml>=0.8.1",
     "google-cloud-aiplatform>=1.75.0",
-    "google-cloud-secret-manager>=2.21.0",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.6.0",
     "structlog>=24.4.0",

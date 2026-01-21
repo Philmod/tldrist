@@ -1,13 +1,10 @@
 """Configuration loading for TLDRist."""
 
-import os
 import re
 from functools import lru_cache
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-from tldrist.utils.secrets import get_secret_manager
 
 # Simple email regex - not exhaustive but catches obvious errors
 EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -29,9 +26,14 @@ class Settings(BaseSettings):
     gmail_address: str = Field(description="Gmail address for sending emails")
     recipient_email: str = Field(description="Email address to receive the digest")
 
+    # Secrets (injected by Cloud Run from Secret Manager, or set directly for local testing)
+    todoist_token: str = Field(description="Todoist API token")
+    gmail_app_password: str = Field(description="Gmail App Password")
+
     # Application settings
     log_level: str = Field(default="INFO", description="Logging level")
     dry_run: bool = Field(default=False, description="Run without sending email or updating tasks")
+    skip_auth: bool = Field(default=False, description="Skip OIDC auth (local testing only)")
 
     @field_validator("gcp_project_id")
     @classmethod
@@ -77,44 +79,7 @@ class Settings(BaseSettings):
         return v
 
 
-class SecretsConfig:
-    """Secrets loaded from Google Cloud Secret Manager."""
-
-    def __init__(self, project_id: str) -> None:
-        self._secret_manager = get_secret_manager(project_id)
-        self._todoist_token: str | None = None
-        self._gmail_app_password: str | None = None
-
-    @property
-    def todoist_token(self) -> str:
-        """Get the Todoist API token."""
-        if self._todoist_token is None:
-            self._todoist_token = self._secret_manager.get_secret("todoist-token")
-        return self._todoist_token
-
-    @property
-    def gmail_app_password(self) -> str:
-        """Get the Gmail App Password."""
-        if self._gmail_app_password is None:
-            self._gmail_app_password = self._secret_manager.get_secret("gmail-app-password")
-        return self._gmail_app_password
-
-
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     """Get cached application settings."""
     return Settings()  # type: ignore[call-arg]
-
-
-def get_secrets(project_id: str | None = None) -> SecretsConfig:
-    """Get secrets configuration.
-
-    Args:
-        project_id: GCP project ID. If not provided, uses settings.
-
-    Returns:
-        SecretsConfig instance for accessing secrets.
-    """
-    if project_id is None:
-        project_id = get_settings().gcp_project_id
-    return SecretsConfig(project_id)
