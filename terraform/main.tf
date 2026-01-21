@@ -22,6 +22,7 @@ resource "google_project_service" "apis" {
     "secretmanager.googleapis.com",
     "aiplatform.googleapis.com",
     "cloudbuild.googleapis.com",
+    "artifactregistry.googleapis.com",
   ])
 
   service            = each.value
@@ -56,10 +57,9 @@ resource "google_cloud_run_v2_service" "tldrist" {
         value = var.recipient_email
       }
       env {
-        name  = "TLDRIST_TODOIST_PROJECT_NAME"
-        value = var.todoist_project_name
+        name  = "TLDRIST_TODOIST_PROJECT_ID"
+        value = var.todoist_project_id
       }
-
       resources {
         limits = {
           cpu    = "1"

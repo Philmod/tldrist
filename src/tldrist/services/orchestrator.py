@@ -37,14 +37,14 @@ class Orchestrator:
         gemini_client: GeminiClient,
         gmail_client: GmailClient,
         recipient_email: str,
-        todoist_project_name: str = "Read",
+        todoist_project_id: str,
     ) -> None:
         self._todoist = todoist_client
         self._fetcher = article_fetcher
         self._gemini = gemini_client
         self._gmail = gmail_client
         self._recipient_email = recipient_email
-        self._project_name = todoist_project_name
+        self._project_id = todoist_project_id
 
         self._summarizer = SummarizerService(gemini_client)
         self._digest = DigestService(gemini_client)
@@ -58,24 +58,10 @@ class Orchestrator:
         Returns:
             OrchestrationResult with statistics about the run.
         """
-        logger.info("Starting orchestration", dry_run=dry_run)
+        logger.info("Starting orchestration", dry_run=dry_run, project_id=self._project_id)
 
-        # Find the Read project
-        project = await self._todoist.get_project_by_name(self._project_name)
-        if project is None:
-            logger.error("Project not found", project_name=self._project_name)
-            return OrchestrationResult(
-                tasks_found=0,
-                articles_processed=0,
-                articles_failed=0,
-                tasks_updated=0,
-                tasks_update_failed=0,
-                email_sent=False,
-                dry_run=dry_run,
-            )
-
-        # Get tasks with URLs
-        tasks = await self._todoist.get_tasks(project.id)
+        # Get tasks with URLs from the configured project
+        tasks = await self._todoist.get_tasks(self._project_id)
         tasks_with_urls = [t for t in tasks if t.url is not None]
         logger.info("Found tasks with URLs", count=len(tasks_with_urls))
 

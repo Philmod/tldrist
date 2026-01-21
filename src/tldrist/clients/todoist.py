@@ -42,19 +42,6 @@ class TodoistTask:
         return match.group(0) if match else None
 
 
-@dataclass
-class TodoistProject:
-    """Represents a Todoist project."""
-
-    id: str
-    name: str
-
-    @classmethod
-    def from_api_response(cls, data: dict) -> "TodoistProject":
-        """Create a TodoistProject from API response data."""
-        return cls(id=data["id"], name=data["name"])
-
-
 class TodoistClient:
     """Client for interacting with the Todoist REST API v2."""
 
@@ -75,35 +62,6 @@ class TodoistClient:
 
     async def __aexit__(self, *args: object) -> None:
         await self.close()
-
-    async def get_projects(self) -> list[TodoistProject]:
-        """Get all projects.
-
-        Returns:
-            List of TodoistProject objects.
-        """
-        logger.info("Fetching all projects")
-        response = await self._client.get("/projects")
-        response.raise_for_status()
-        data = response.json()
-        return [TodoistProject.from_api_response(p) for p in data]
-
-    async def get_project_by_name(self, name: str) -> TodoistProject | None:
-        """Find a project by its name.
-
-        Args:
-            name: The name of the project to find.
-
-        Returns:
-            The TodoistProject if found, None otherwise.
-        """
-        projects = await self.get_projects()
-        for project in projects:
-            if project.name == name:
-                logger.info("Found project", project_id=project.id, project_name=name)
-                return project
-        logger.warning("Project not found", project_name=name)
-        return None
 
     async def get_tasks(self, project_id: str) -> list[TodoistTask]:
         """Get all tasks in a project.

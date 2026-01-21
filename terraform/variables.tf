@@ -19,10 +19,9 @@ variable "gmail_address" {
   type        = string
 }
 
-variable "todoist_project_name" {
-  description = "Name of the Todoist project to process"
+variable "todoist_project_id" {
+  description = "ID of the Todoist project to process (from URL: app.todoist.com/app/project/{name}-{ID})"
   type        = string
-  default     = "Read"
 }
 
 variable "scheduler_timezone" {

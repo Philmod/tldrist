@@ -21,12 +21,9 @@ class Settings(BaseSettings):
     # GCP settings
     gcp_project_id: str = Field(description="Google Cloud project ID")
     gcp_region: str = Field(default="europe-west1", description="Google Cloud region")
-    cloud_run_service_url: str = Field(description="Cloud Run service URL for OIDC audience validation")
 
     # Todoist settings
-    todoist_project_name: str = Field(
-        default="Read", description="Name of the Todoist project to process"
-    )
+    todoist_project_id: str = Field(description="ID of the Todoist project to process")
 
     # Email settings
     gmail_address: str = Field(description="Gmail address for sending emails")
@@ -46,22 +43,6 @@ class Settings(BaseSettings):
                 "Set it to your Google Cloud project ID."
             )
         return v.strip()
-
-    @field_validator("cloud_run_service_url")
-    @classmethod
-    def validate_cloud_run_service_url(cls, v: str) -> str:
-        """Validate Cloud Run service URL."""
-        if not v or not v.strip():
-            raise ValueError(
-                "TLDRIST_CLOUD_RUN_SERVICE_URL is required. "
-                "Set it to your Cloud Run service URL for OIDC audience validation."
-            )
-        v = v.strip()
-        if not v.startswith("https://"):
-            raise ValueError(
-                "TLDRIST_CLOUD_RUN_SERVICE_URL must be an HTTPS URL."
-            )
-        return v
 
     @field_validator("gmail_address")
     @classmethod

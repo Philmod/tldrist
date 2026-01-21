@@ -78,7 +78,7 @@ async def summarize(
                         gemini_client=gemini,
                         gmail_client=gmail,
                         recipient_email=settings.recipient_email,
-                        todoist_project_name=settings.todoist_project_name,
+                        todoist_project_id=settings.todoist_project_id,
                     )
 
                     result = await orchestrator.run(dry_run=dry_run or settings.dry_run)

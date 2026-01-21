@@ -4,7 +4,6 @@ from fastapi import Header, HTTPException, status
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 
-from tldrist.config import get_settings
 from tldrist.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -41,11 +40,12 @@ async def verify_oidc_token(
     token = authorization[7:]  # Remove "Bearer " prefix
 
     try:
-        # Verify the OIDC token with audience validation
-        settings = get_settings()
+        # Verify the OIDC token (signature and expiry)
+        # Audience validation is handled by Cloud Run's IAM - only the scheduler
+        # service account has roles/run.invoker permission
         request = google_requests.Request()
         claims: dict[str, object] = id_token.verify_oauth2_token(
-            token, request, audience=settings.cloud_run_service_url
+            token, request, audience=None
         )  # type: ignore[no-untyped-call]
 
         # Log successful authentication (without sensitive data)

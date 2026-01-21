@@ -4,7 +4,7 @@ import pytest
 import respx
 from httpx import Response
 
-from tldrist.clients.todoist import TodoistClient, TodoistTask, TodoistProject
+from tldrist.clients.todoist import TodoistClient, TodoistTask
 
 
 class TestTodoistTask:
@@ -58,55 +58,6 @@ class TestTodoistClient:
     def client(self) -> TodoistClient:
         """Create a test client."""
         return TodoistClient(token="test-token")
-
-    @respx.mock
-    async def test_get_projects(self, client: TodoistClient) -> None:
-        """Should fetch and parse projects."""
-        respx.get("https://api.todoist.com/rest/v2/projects").mock(
-            return_value=Response(
-                200,
-                json=[
-                    {"id": "1", "name": "Inbox"},
-                    {"id": "2", "name": "Read"},
-                ],
-            )
-        )
-
-        projects = await client.get_projects()
-        assert len(projects) == 2
-        assert projects[0].name == "Inbox"
-        assert projects[1].name == "Read"
-        await client.close()
-
-    @respx.mock
-    async def test_get_project_by_name_found(self, client: TodoistClient) -> None:
-        """Should find project by name."""
-        respx.get("https://api.todoist.com/rest/v2/projects").mock(
-            return_value=Response(
-                200,
-                json=[
-                    {"id": "1", "name": "Inbox"},
-                    {"id": "2", "name": "Read"},
-                ],
-            )
-        )
-
-        project = await client.get_project_by_name("Read")
-        assert project is not None
-        assert project.id == "2"
-        assert project.name == "Read"
-        await client.close()
-
-    @respx.mock
-    async def test_get_project_by_name_not_found(self, client: TodoistClient) -> None:
-        """Should return None when project not found."""
-        respx.get("https://api.todoist.com/rest/v2/projects").mock(
-            return_value=Response(200, json=[{"id": "1", "name": "Inbox"}])
-        )
-
-        project = await client.get_project_by_name("Read")
-        assert project is None
-        await client.close()
 
     @respx.mock
     async def test_get_tasks(self, client: TodoistClient) -> None:
