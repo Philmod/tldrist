@@ -60,6 +60,24 @@ resource "google_cloud_run_v2_service" "tldrist" {
         name  = "TLDRIST_TODOIST_PROJECT_ID"
         value = var.todoist_project_id
       }
+      env {
+        name = "TLDRIST_TODOIST_TOKEN"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.todoist_token.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "TLDRIST_GMAIL_APP_PASSWORD"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.gmail_app_password.secret_id
+            version = "latest"
+          }
+        }
+      }
       resources {
         limits = {
           cpu    = "1"
@@ -85,7 +103,11 @@ resource "google_cloud_run_v2_service" "tldrist" {
     timeout = "300s"
   }
 
-  depends_on = [google_project_service.apis]
+  depends_on = [
+    google_project_service.apis,
+    google_secret_manager_secret_iam_member.todoist_token,
+    google_secret_manager_secret_iam_member.gmail_app_password,
+  ]
 }
 
 # Cloud Scheduler job - runs every Monday at 7am Paris time
