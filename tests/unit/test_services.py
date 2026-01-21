@@ -58,7 +58,7 @@ class TestSummarizerService:
         assert "## Summary" in description
         assert "This is the summary." in description
         assert "2024-01-15" in description
-        assert "TLDRist" in description
+        assert "TL;DRist" in description
 
 
 class TestDigestService:
