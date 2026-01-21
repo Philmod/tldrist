@@ -41,6 +41,7 @@ async def health() -> HealthResponse:
 @router.post("/summarize", response_model=SummarizeResponse, dependencies=[Depends(verify_oidc_token)])
 async def summarize(
     dry_run: bool = Query(default=False, description="Run without sending email or updating tasks"),
+    limit: int | None = Query(default=None, description="Maximum number of articles to process"),
 ) -> SummarizeResponse:
     """Run the article summarization workflow.
 
@@ -53,11 +54,12 @@ async def summarize(
 
     Args:
         dry_run: If True, performs all steps except sending email and updating tasks.
+        limit: Maximum number of articles to process. If None, process all.
 
     Returns:
         SummarizeResponse with statistics about the run.
     """
-    logger.info("Summarize endpoint called", dry_run=dry_run)
+    logger.info("Summarize endpoint called", dry_run=dry_run, limit=limit)
 
     settings = get_settings()
 
@@ -80,7 +82,7 @@ async def summarize(
                         todoist_project_id=settings.todoist_project_id,
                     )
 
-                    result = await orchestrator.run(dry_run=dry_run or settings.dry_run)
+                    result = await orchestrator.run(dry_run=dry_run or settings.dry_run, limit=limit)
 
     status = _determine_status(
         result.tasks_found,
