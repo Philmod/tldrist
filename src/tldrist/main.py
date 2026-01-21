@@ -1,7 +1,7 @@
 """FastAPI application entry point for TLDRist."""
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from fastapi import FastAPI
 
@@ -17,9 +17,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     setup_logging(settings.log_level)
     logger = get_logger(__name__)
-    logger.info("TLDRist starting", version=__version__)
+    logger.info("TL;DRist starting", version=__version__)
     yield
-    logger.info("TLDRist shutting down")
+    logger.info("TL;DRist shutting down")
 
 
 app = FastAPI(

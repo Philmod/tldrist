@@ -1,5 +1,6 @@
 """Article fetcher and content extractor for TLDRist."""
 
+import re
 from dataclasses import dataclass
 
 import httpx
@@ -9,6 +10,48 @@ from readability import Document
 from tldrist.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+# ArXiv URL patterns
+ARXIV_ABS_PATTERN = re.compile(r"https?://arxiv\.org/abs/(\d+\.\d+(?:v\d+)?)")
+ARXIV_PDF_PATTERN = re.compile(r"https?://arxiv\.org/pdf/(\d+\.\d+(?:v\d+)?)")
+
+
+def is_arxiv_url(url: str) -> bool:
+    """Check if a URL is an arXiv abstract or PDF URL."""
+    return bool(ARXIV_ABS_PATTERN.match(url) or ARXIV_PDF_PATTERN.match(url))
+
+
+def arxiv_url_to_pdf_url(url: str) -> str:
+    """Convert an arXiv URL to the PDF download URL.
+
+    Args:
+        url: An arXiv abstract or PDF URL.
+
+    Returns:
+        The PDF download URL.
+    """
+    abs_match = ARXIV_ABS_PATTERN.match(url)
+    if abs_match:
+        arxiv_id = abs_match.group(1)
+        return f"https://arxiv.org/pdf/{arxiv_id}.pdf"
+
+    pdf_match = ARXIV_PDF_PATTERN.match(url)
+    if pdf_match:
+        arxiv_id = pdf_match.group(1)
+        return f"https://arxiv.org/pdf/{arxiv_id}.pdf"
+
+    # If no pattern matches, return as-is (caller should validate first)
+    return url
+
+
+@dataclass
+class ArxivContent:
+    """Represents fetched arXiv paper content."""
+
+    url: str
+    pdf_url: str
+    title: str
+    pdf_bytes: bytes
 
 
 @dataclass
@@ -139,3 +182,69 @@ class ArticleFetcher:
         except Exception as e:
             logger.debug("Readability extraction failed", error=str(e))
             return "", fallback_title
+
+    async def fetch_arxiv(self, url: str) -> ArxivContent | None:
+        """Fetch an arXiv paper as PDF.
+
+        Args:
+            url: The arXiv abstract or PDF URL.
+
+        Returns:
+            An ArxivContent object if successful, None otherwise.
+        """
+        logger.info("Fetching arXiv paper", url=url)
+
+        pdf_url = arxiv_url_to_pdf_url(url)
+
+        try:
+            # First fetch the abstract page to get the title
+            abs_match = ARXIV_ABS_PATTERN.match(url)
+            pdf_match = ARXIV_PDF_PATTERN.match(url)
+            match = abs_match or pdf_match
+            arxiv_id = match.group(1) if match else None
+
+            if arxiv_id:
+                abs_url = f"https://arxiv.org/abs/{arxiv_id}"
+                abs_response = await self._client.get(abs_url)
+                abs_response.raise_for_status()
+                metadata = trafilatura.extract_metadata(abs_response.text)
+                title = metadata.title if metadata and metadata.title else f"arXiv:{arxiv_id}"
+            else:
+                title = "arXiv Paper"
+
+            # Fetch the PDF
+            pdf_response = await self._client.get(pdf_url)
+            pdf_response.raise_for_status()
+
+            if "application/pdf" not in pdf_response.headers.get("content-type", ""):
+                logger.warning("Response is not a PDF", url=pdf_url)
+                return None
+
+            pdf_bytes = pdf_response.content
+
+            logger.info(
+                "arXiv paper fetched",
+                url=url,
+                title=title,
+                pdf_size=len(pdf_bytes),
+            )
+
+            return ArxivContent(
+                url=url,
+                pdf_url=pdf_url,
+                title=title,
+                pdf_bytes=pdf_bytes,
+            )
+
+        except httpx.HTTPStatusError as e:
+            logger.warning("HTTP error fetching arXiv", url=url, status=e.response.status_code)
+            return None
+        except httpx.TimeoutException:
+            logger.warning("Timeout fetching arXiv", url=url)
+            return None
+        except httpx.RequestError as e:
+            logger.warning("Request error fetching arXiv", url=url, error=str(e))
+            return None
+        except Exception as e:
+            logger.error("Failed to fetch arXiv paper", url=url, error=str(e))
+            return None

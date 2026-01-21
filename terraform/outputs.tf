@@ -9,6 +9,6 @@ output "scheduler_job_name" {
 }
 
 output "service_account_email" {
-  description = "Email of the TLDRist service account"
+  description = "Email of the TL;DRist service account"
   value       = google_service_account.tldrist.email
 }

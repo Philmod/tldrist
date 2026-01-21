@@ -3,7 +3,7 @@
 import asyncio
 from dataclasses import dataclass
 
-from tldrist.clients.article import ArticleFetcher
+from tldrist.clients.article import ArticleFetcher, is_arxiv_url
 from tldrist.clients.gemini import GeminiClient
 from tldrist.clients.gmail import GmailClient
 from tldrist.clients.todoist import TodoistClient, TodoistTask
@@ -28,7 +28,7 @@ class OrchestrationResult:
 
 
 class Orchestrator:
-    """Orchestrates the complete TLDRist workflow."""
+    """Orchestrates the complete TL;DRist workflow."""
 
     def __init__(
         self,
@@ -159,12 +159,30 @@ class Orchestrator:
 
         logger.info("Processing task", task_id=task.id, url=task.url)
 
+        # Route arXiv URLs to specialized processing
+        if is_arxiv_url(task.url):
+            return await self._process_arxiv_task(task)
+
         article = await self._fetcher.fetch(task.url)
         if article is None:
             logger.warning("Failed to fetch article", task_id=task.id, url=task.url)
             return None
 
         return await self._summarizer.summarize(task.id, article)
+
+    async def _process_arxiv_task(self, task: TodoistTask) -> ProcessedArticle | None:
+        """Process an arXiv task by fetching PDF and summarizing with Gemini."""
+        if task.url is None:
+            return None
+
+        logger.info("Processing arXiv task", task_id=task.id, url=task.url)
+
+        arxiv_content = await self._fetcher.fetch_arxiv(task.url)
+        if arxiv_content is None:
+            logger.warning("Failed to fetch arXiv paper", task_id=task.id, url=task.url)
+            return None
+
+        return await self._summarizer.summarize_arxiv(task.id, arxiv_content)
 
     async def _update_tasks(self, articles: list[ProcessedArticle]) -> tuple[int, int]:
         """Update Todoist tasks with their summaries.

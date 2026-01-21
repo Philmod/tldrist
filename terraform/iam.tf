@@ -7,7 +7,7 @@ resource "google_service_account" "tldrist" {
 # Service account for Cloud Scheduler
 resource "google_service_account" "scheduler" {
   account_id   = "tldrist-scheduler"
-  display_name = "TLDRist Cloud Scheduler Service Account"
+  display_name = "TL;DRist Cloud Scheduler Service Account"
 }
 
 # Allow tldrist service account to access secrets

@@ -91,7 +91,7 @@ resource "google_cloud_run_v2_service" "tldrist" {
 # Cloud Scheduler job - runs every Monday at 7am Paris time
 resource "google_cloud_scheduler_job" "weekly_digest" {
   name        = "tldrist-weekly-digest"
-  description = "Trigger TLDRist weekly digest every Monday at 7am"
+  description = "Trigger TL;DRist weekly digest every Monday at 7am"
   schedule    = "0 7 * * 1"
   time_zone   = var.scheduler_timezone
 

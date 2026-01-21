@@ -1,9 +1,10 @@
 """Vertex AI Gemini client for TLDRist."""
 
+import json
 from dataclasses import dataclass
 
 import vertexai
-from vertexai.generative_models import GenerativeModel, GenerationConfig
+from vertexai.generative_models import GenerationConfig, GenerativeModel, Part
 
 from tldrist.utils.logging import get_logger
 
@@ -32,6 +33,44 @@ Article Summaries:
 {summaries}
 
 Introduction:"""
+
+SUMMARIZE_PDF_PROMPT = """You are a helpful assistant that summarizes academic papers concisely.
+
+Please provide a summary of the following academic paper. The summary should:
+- Be 3-5 paragraphs long
+- Explain the paper's main contributions and key findings
+- Highlight the methodology and approach used
+- Mention any important results, figures, or conclusions
+- Be accessible to a technical but non-specialist audience
+
+Paper Title: {title}
+
+Summary:"""
+
+EXTRACT_FIGURE_PROMPT = (
+    "You are analyzing an academic paper to identify the most important "
+    "figure or chart.\n\n"
+    "Look through this paper and identify the single most important figure, "
+    "chart, or diagram that best represents the paper's key contribution "
+    "or findings.\n\n"
+    "Respond with ONLY a JSON object in this exact format, no other text:\n"
+    '{"figure_number": "1", "page_number": 3, '
+    '"description": "Brief description of what the figure shows", '
+    '"reason": "Why this figure is the most important"}\n\n'
+    "If there are no figures or you cannot identify one, respond with:\n"
+    '{"figure_number": null, "page_number": null, '
+    '"description": null, "reason": "No figures found"}'
+)
+
+
+@dataclass
+class FigureInfo:
+    """Information about an identified important figure."""
+
+    figure_number: str | None
+    page_number: int | None
+    description: str | None
+    reason: str | None
 
 
 @dataclass
@@ -134,3 +173,89 @@ class GeminiClient:
         intro = response.text
         logger.info("Digest introduction generated", length=len(intro))
         return intro
+
+    async def summarize_pdf(self, title: str, pdf_bytes: bytes) -> str:
+        """Generate a summary for a PDF document.
+
+        Args:
+            title: The paper title.
+            pdf_bytes: The PDF content as bytes.
+
+        Returns:
+            The generated summary.
+        """
+        logger.info("Summarizing PDF", title=title, pdf_size=len(pdf_bytes))
+
+        model = self._get_model()
+
+        pdf_part = Part.from_data(data=pdf_bytes, mime_type="application/pdf")
+        prompt = SUMMARIZE_PDF_PROMPT.format(title=title)
+
+        config = GenerationConfig(
+            temperature=0.3,
+            max_output_tokens=2048,
+        )
+
+        response = await model.generate_content_async(
+            [pdf_part, prompt],  # type: ignore[arg-type]
+            generation_config=config,
+        )
+
+        summary = response.text
+        logger.info("PDF summarized", title=title, summary_length=len(summary))
+        return summary
+
+    async def identify_important_figure(self, pdf_bytes: bytes) -> FigureInfo | None:
+        """Identify the most important figure in a PDF.
+
+        Args:
+            pdf_bytes: The PDF content as bytes.
+
+        Returns:
+            FigureInfo with details about the most important figure, or None if failed.
+        """
+        logger.info("Identifying important figure", pdf_size=len(pdf_bytes))
+
+        model = self._get_model()
+
+        pdf_part = Part.from_data(data=pdf_bytes, mime_type="application/pdf")
+
+        config = GenerationConfig(
+            temperature=0.1,
+            max_output_tokens=512,
+        )
+
+        try:
+            response = await model.generate_content_async(
+                [pdf_part, EXTRACT_FIGURE_PROMPT],  # type: ignore[arg-type]
+                generation_config=config,
+            )
+
+            response_text = response.text.strip()
+            # Handle potential markdown code blocks
+            if response_text.startswith("```"):
+                lines = response_text.split("\n")
+                response_text = "\n".join(lines[1:-1]) if len(lines) > 2 else response_text
+
+            data = json.loads(response_text)
+
+            figure_info = FigureInfo(
+                figure_number=data.get("figure_number"),
+                page_number=data.get("page_number"),
+                description=data.get("description"),
+                reason=data.get("reason"),
+            )
+
+            logger.info(
+                "Figure identified",
+                figure_number=figure_info.figure_number,
+                page_number=figure_info.page_number,
+            )
+            return figure_info
+
+        except json.JSONDecodeError as e:
+            logger.warning("Failed to parse figure identification response", error=str(e))
+            return None
+        except Exception as e:
+            logger.warning("Failed to identify important figure", error=str(e))
+            return None
