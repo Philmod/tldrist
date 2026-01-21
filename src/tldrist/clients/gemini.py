@@ -24,14 +24,14 @@ Article Content:
 
 Summary:"""
 
-DIGEST_PROMPT = """You are a helpful assistant creating a weekly reading digest.
+DIGEST_PROMPT = """You are a helpful assistant creating a reading digest.
 
-Based on the following article summaries, create a cohesive weekly digest introduction (2-3 sentences) that highlights the main themes and most interesting insights across all articles.
+Based on the following article summaries, write a brief introduction (2-3 sentences) that highlights the main themes and most interesting insights.
 
 Article Summaries:
 {summaries}
 
-Weekly Digest Introduction:"""
+Introduction:"""
 
 
 @dataclass
@@ -50,7 +50,7 @@ class GeminiClient:
         self,
         project_id: str,
         region: str = "europe-west1",
-        model_name: str = "gemini-2.5-pro",
+        model_name: str = "gemini-2.0-flash-001",
     ) -> None:
         self._project_id = project_id
         self._region = region
