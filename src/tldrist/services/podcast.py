@@ -1,6 +1,9 @@
 """Podcast generation service for TLDRist."""
 
+import json
 from datetime import UTC, datetime
+
+from vertexai.generative_models import GenerationConfig
 
 from tldrist.clients.gemini import GeminiClient
 from tldrist.clients.storage import ImageStorage
@@ -52,24 +55,14 @@ class PodcastService:
         """
         logger.info("Generating podcast script", article_count=len(articles))
 
-        # Format articles as JSON-like structure for the prompt
-        articles_data = []
-        for article in articles:
-            articles_data.append({
-                "title": article.title,
-                "url": article.url,
-                "summary": article.summary,
-            })
-
-        import json
+        articles_data = [
+            {"title": article.title, "url": article.url, "summary": article.summary}
+            for article in articles
+        ]
         articles_json = json.dumps(articles_data, indent=2)
-
         prompt = PODCAST_SCRIPT_PROMPT.format(articles_json=articles_json)
 
-        # Use the internal method to get model and generate
         model = self._gemini._get_model()
-        from vertexai.generative_models import GenerationConfig
-
         config = GenerationConfig(
             temperature=0.7,
             max_output_tokens=4096,
