@@ -12,3 +12,8 @@ output "service_account_email" {
   description = "Email of the TL;DRist service account"
   value       = google_service_account.tldrist.email
 }
+
+output "images_bucket_name" {
+  description = "Name of the public GCS bucket for images"
+  value       = google_storage_bucket.images.name
+}

@@ -23,10 +23,30 @@ resource "google_project_service" "apis" {
     "aiplatform.googleapis.com",
     "cloudbuild.googleapis.com",
     "artifactregistry.googleapis.com",
+    "storage.googleapis.com",
+    "developerconnect.googleapis.com",
   ])
 
   service            = each.value
   disable_on_destroy = false
+}
+
+# GCS bucket for public images (used in email digests)
+resource "google_storage_bucket" "images" {
+  name          = "${var.project_id}-public"
+  location      = var.region
+  force_destroy = true
+
+  uniform_bucket_level_access = true
+
+  depends_on = [google_project_service.apis]
+}
+
+# Make bucket publicly readable
+resource "google_storage_bucket_iam_member" "public_read" {
+  bucket = google_storage_bucket.images.name
+  role   = "roles/storage.objectViewer"
+  member = "allUsers"
 }
 
 # Cloud Run service
@@ -59,6 +79,10 @@ resource "google_cloud_run_v2_service" "tldrist" {
       env {
         name  = "TLDRIST_TODOIST_PROJECT_ID"
         value = var.todoist_project_id
+      }
+      env {
+        name  = "TLDRIST_GCS_IMAGES_BUCKET"
+        value = google_storage_bucket.images.name
       }
       env {
         name = "TLDRIST_TODOIST_TOKEN"
@@ -108,6 +132,7 @@ resource "google_cloud_run_v2_service" "tldrist" {
     google_project_service.apis,
     google_secret_manager_secret_iam_member.todoist_token,
     google_secret_manager_secret_iam_member.gmail_app_password,
+    google_storage_bucket.images,
   ]
 }
 
@@ -137,38 +162,61 @@ resource "google_cloud_scheduler_job" "weekly_digest" {
   depends_on = [google_project_service.apis]
 }
 
+# 2nd-gen GitHub connection (created via gcloud, imported into Terraform)
+# To recreate: gcloud builds connections create github github --region=europe-west1
+resource "google_cloudbuildv2_connection" "github" {
+  name     = "github"
+  location = var.region
+  project  = var.project_id
+
+  github_config {
+    app_installation_id = 636654
+  }
+
+  lifecycle {
+    ignore_changes = [github_config]
+  }
+}
+
+# Link the tldrist repository to the connection
+resource "google_cloudbuildv2_repository" "tldrist" {
+  name              = "tldrist"
+  location          = var.region
+  project           = var.project_id
+  parent_connection = google_cloudbuildv2_connection.github.name
+  remote_uri        = "https://github.com/Philmod/tldrist.git"
+}
+
 # Cloud Build trigger for automatic deployments on merge to main
 resource "google_cloudbuild_trigger" "main" {
   name     = "tldrist-main"
+  project  = var.project_id
   location = var.region
 
-  github {
-    owner = "philmod"
-    name  = "tldrist"
+  repository_event_config {
+    repository = google_cloudbuildv2_repository.tldrist.id
     push {
       branch = "^main$"
     }
   }
 
-  filename = "cloudbuild.yaml"
-
-  depends_on = [google_project_service.apis]
+  filename        = "cloudbuild.yaml"
+  service_account = google_service_account.cloudbuild.id
 }
 
 # Cloud Build trigger for Pull Request checks (runs tests only)
 resource "google_cloudbuild_trigger" "pr" {
   name     = "tldrist-pr"
+  project  = var.project_id
   location = var.region
 
-  github {
-    owner = "philmod"
-    name  = "tldrist"
+  repository_event_config {
+    repository = google_cloudbuildv2_repository.tldrist.id
     pull_request {
       branch = "^main$"
     }
   }
 
-  filename = "cloudbuild-pr.yaml"
-
-  depends_on = [google_project_service.apis]
+  filename        = "cloudbuild-pr.yaml"
+  service_account = google_service_account.cloudbuild.id
 }

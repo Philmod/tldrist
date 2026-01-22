@@ -8,6 +8,7 @@ from tldrist.api.models import HealthResponse, SummarizeResponse
 from tldrist.clients.article import ArticleFetcher
 from tldrist.clients.gemini import GeminiClient
 from tldrist.clients.gmail import GmailClient
+from tldrist.clients.storage import ImageStorage
 from tldrist.clients.todoist import TodoistClient
 from tldrist.config import get_settings
 from tldrist.services.orchestrator import Orchestrator
@@ -83,6 +84,11 @@ async def summarize(
                     gmail_address=settings.gmail_address,
                     app_password=settings.gmail_app_password,
                 ) as gmail:
+                    # Create ImageStorage if bucket is configured
+                    image_storage = None
+                    if settings.gcs_images_bucket:
+                        image_storage = ImageStorage(settings.gcs_images_bucket)
+
                     orchestrator = Orchestrator(
                         todoist_client=todoist,
                         article_fetcher=fetcher,
@@ -90,6 +96,7 @@ async def summarize(
                         gmail_client=gmail,
                         recipient_email=settings.recipient_email,
                         todoist_project_id=settings.todoist_project_id,
+                        image_storage=image_storage,
                     )
 
                     result = await orchestrator.run(

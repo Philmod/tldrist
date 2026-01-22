@@ -8,6 +8,7 @@ from pathlib import Path
 from tldrist.clients.article import ArticleFetcher, is_arxiv_url
 from tldrist.clients.gemini import GeminiClient
 from tldrist.clients.gmail import GmailClient
+from tldrist.clients.storage import ImageStorage
 from tldrist.clients.todoist import TodoistClient, TodoistTask
 from tldrist.services.digest import DigestService
 from tldrist.services.summarizer import ProcessedArticle, SummarizerService
@@ -41,6 +42,7 @@ class Orchestrator:
         gmail_client: GmailClient,
         recipient_email: str,
         todoist_project_id: str,
+        image_storage: ImageStorage | None = None,
     ) -> None:
         self._todoist = todoist_client
         self._fetcher = article_fetcher
@@ -50,7 +52,7 @@ class Orchestrator:
         self._project_id = todoist_project_id
 
         self._summarizer = SummarizerService(gemini_client)
-        self._digest = DigestService(gemini_client)
+        self._digest = DigestService(gemini_client, image_storage)
 
     async def run(
         self,
