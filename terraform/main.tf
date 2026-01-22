@@ -154,3 +154,21 @@ resource "google_cloudbuild_trigger" "main" {
 
   depends_on = [google_project_service.apis]
 }
+
+# Cloud Build trigger for Pull Request checks (runs tests only)
+resource "google_cloudbuild_trigger" "pr" {
+  name     = "tldrist-pr"
+  location = var.region
+
+  github {
+    owner = "philmod"
+    name  = "tldrist"
+    pull_request {
+      branch = "^main$"
+    }
+  }
+
+  filename = "cloudbuild-pr.yaml"
+
+  depends_on = [google_project_service.apis]
+}
