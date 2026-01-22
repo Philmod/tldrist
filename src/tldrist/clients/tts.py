@@ -27,9 +27,17 @@ VOICE_SAM = VoiceConfig(name="en-US-Neural2-F", language_code="en-US")  # Female
 class TTSClient:
     """Client for Google Cloud Text-to-Speech API."""
 
-    def __init__(self) -> None:
-        """Initialize the TTS client."""
-        self._client = texttospeech.TextToSpeechClient()
+    def __init__(self, project_id: str) -> None:
+        """Initialize the TTS client.
+
+        Args:
+            project_id: The GCP project ID to use for TTS API calls.
+        """
+        from google.api_core import client_options
+
+        # Configure client to use specific project for quota/billing
+        options = client_options.ClientOptions(quota_project_id=project_id)
+        self._client = texttospeech.TextToSpeechClient(client_options=options)
         self._audio_config = texttospeech.AudioConfig(
             audio_encoding=texttospeech.AudioEncoding.MP3,
             speaking_rate=1.0,

@@ -90,7 +90,7 @@ async def summarize(
                     tts_client = None
                     if settings.gcs_images_bucket:
                         image_storage = ImageStorage(settings.gcs_images_bucket)
-                        tts_client = TTSClient()
+                        tts_client = TTSClient(project_id=settings.gcp_project_id)
 
                     orchestrator = Orchestrator(
                         todoist_client=todoist,
