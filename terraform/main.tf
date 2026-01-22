@@ -201,7 +201,7 @@ resource "google_cloudbuild_trigger" "main" {
   }
 
   filename        = "cloudbuild.yaml"
-  service_account = "projects/${var.project_id}/serviceAccounts/${data.google_project.current.number}@cloudbuild.gserviceaccount.com"
+  service_account = google_service_account.cloudbuild.id
 }
 
 # Cloud Build trigger for Pull Request checks (runs tests only)
@@ -218,5 +218,5 @@ resource "google_cloudbuild_trigger" "pr" {
   }
 
   filename        = "cloudbuild-pr.yaml"
-  service_account = "projects/${var.project_id}/serviceAccounts/${data.google_project.current.number}@cloudbuild.gserviceaccount.com"
+  service_account = google_service_account.cloudbuild.id
 }
