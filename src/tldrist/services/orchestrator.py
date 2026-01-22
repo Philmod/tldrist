@@ -1,7 +1,9 @@
 """Main workflow orchestrator for TLDRist."""
 
 import asyncio
+import tempfile
 from dataclasses import dataclass
+from pathlib import Path
 
 from tldrist.clients.article import ArticleFetcher, is_arxiv_url
 from tldrist.clients.gemini import GeminiClient
@@ -78,11 +80,9 @@ class Orchestrator:
                 self._gmail.send_email(self._recipient_email, subject, html)
             else:
                 logger.info("Dry run - generated email subject", subject=subject)
-                print("\n" + "=" * 60)
-                print("GENERATED HTML EMAIL:")
-                print("=" * 60)
-                print(html)
-                print("=" * 60 + "\n")
+                html_path = self._write_dry_run_html(html)
+                logger.info("Dry run - HTML written to file", path=str(html_path))
+                print(f"Dry run HTML saved to: {html_path}")
             return OrchestrationResult(
                 tasks_found=0,
                 articles_processed=0,
@@ -136,11 +136,9 @@ class Orchestrator:
             )
         else:
             logger.info("Dry run - generated email subject", subject=subject)
-            print("\n" + "=" * 60)
-            print("GENERATED HTML EMAIL:")
-            print("=" * 60)
-            print(html)
-            print("=" * 60 + "\n")
+            html_path = self._write_dry_run_html(html)
+            logger.info("Dry run - HTML written to file", path=str(html_path))
+            print(f"Dry run HTML saved to: {html_path}")
 
         return OrchestrationResult(
             tasks_found=len(tasks_with_urls),
@@ -205,3 +203,18 @@ class Orchestrator:
                 )
                 failed += 1
         return updated, failed
+
+    def _write_dry_run_html(self, html: str) -> Path:
+        """Write HTML to a temporary file for dry run preview.
+
+        Returns:
+            Path to the generated HTML file.
+        """
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".html",
+            prefix="tldrist_digest_",
+            delete=False,
+        ) as f:
+            f.write(html)
+            return Path(f.name)
