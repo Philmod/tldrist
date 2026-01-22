@@ -77,33 +77,41 @@ class DigestService:
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 body {{
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 17px;
     max-width: 600px;
     margin: 0 auto;
     padding: 20px;
     color: #333;
-    line-height: 1.6;
+    line-height: 1.7;
 }}
 h1 {{
     color: #1a1a1a;
+    font-size: 26px;
     border-bottom: 2px solid #e0e0e0;
     padding-bottom: 10px;
 }}
 h2 {{
     color: #2c2c2c;
+    font-size: 22px;
     margin-top: 30px;
+    margin-bottom: 20px;
+}}
+p {{
+    margin: 0 0 1em 0;
 }}
 .intro {{
     background: #f8f9fa;
-    padding: 15px;
+    padding: 20px;
     border-radius: 8px;
     margin-bottom: 30px;
 }}
 .article {{
-    margin-bottom: 30px;
-    padding-bottom: 20px;
+    margin-bottom: 40px;
+    padding-bottom: 25px;
     border-bottom: 1px solid #e0e0e0;
 }}
 .article:last-child {{
@@ -119,7 +127,10 @@ h2 {{
     text-decoration: underline;
 }}
 .summary {{
-    margin-top: 10px;
+    margin-top: 15px;
+}}
+.summary p {{
+    margin-bottom: 1.2em;
 }}
 .figure-container {{
     margin: 15px 0;
