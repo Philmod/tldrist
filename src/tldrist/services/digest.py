@@ -1,10 +1,10 @@
 """Digest composition service for TLDRist."""
 
-import base64
 import html
 from datetime import UTC, datetime
 
 from tldrist.clients.gemini import ArticleSummary, GeminiClient
+from tldrist.clients.storage import ImageStorage
 from tldrist.services.summarizer import ProcessedArticle
 from tldrist.utils.logging import get_logger
 
@@ -14,8 +14,11 @@ logger = get_logger(__name__)
 class DigestService:
     """Service for composing the weekly digest email."""
 
-    def __init__(self, gemini_client: GeminiClient) -> None:
+    def __init__(
+        self, gemini_client: GeminiClient, image_storage: ImageStorage | None = None
+    ) -> None:
         self._gemini = gemini_client
+        self._image_storage = image_storage
 
     async def compose_digest(
         self,
@@ -183,14 +186,22 @@ p {{
         safe_summary = html.escape(article.summary)
         summary_paragraphs = safe_summary.replace("\n\n", "</p><p>")
 
-        # Render inline image if present
+        # Upload and render image if present and storage is configured
         image_html = ""
-        if article.image_data and article.image_mime_type:
-            image_html = self._render_inline_image(
-                article.image_data,
-                article.image_mime_type,
-                article.image_caption,
-            )
+        if article.image_data and article.image_mime_type and self._image_storage:
+            try:
+                image_url = self._image_storage.upload_image(
+                    article.image_data,
+                    article.image_mime_type,
+                    article.task_id,
+                )
+                image_html = self._render_image(image_url, article.image_caption)
+            except Exception as e:
+                logger.warning(
+                    "Failed to upload image, skipping",
+                    task_id=article.task_id,
+                    error=str(e),
+                )
 
         return f"""<div class="article">
 <a href="{safe_url}" class="article-title">{safe_title}</a>
@@ -200,31 +211,22 @@ p {{
 {image_html}
 </div>"""
 
-    def _render_inline_image(
-        self,
-        image_data: bytes,
-        mime_type: str,
-        caption: str | None,
-    ) -> str:
-        """Render an inline base64 image with optional caption.
+    def _render_image(self, image_url: str, caption: str | None) -> str:
+        """Render an image from URL with optional caption.
 
         Args:
-            image_data: The image bytes.
-            mime_type: The image MIME type (e.g., 'image/png').
+            image_url: The public URL of the image.
             caption: Optional caption for the image.
 
         Returns:
             HTML string for the figure container.
         """
-        b64_data = base64.b64encode(image_data).decode("ascii")
-        data_url = f"data:{mime_type};base64,{b64_data}"
-
         caption_html = ""
         if caption:
             safe_caption = html.escape(caption)
             caption_html = f'<p class="figure-caption">{safe_caption}</p>'
 
         return f"""<div class="figure-container">
-<img src="{data_url}" class="article-figure" alt="Key figure from paper">
+<img src="{image_url}" class="article-figure" alt="Key figure from paper">
 {caption_html}
 </div>"""

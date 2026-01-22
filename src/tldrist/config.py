@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     # GCP settings
     gcp_project_id: str = Field(description="Google Cloud project ID")
     gcp_region: str = Field(default="europe-west1", description="Google Cloud region")
+    gcs_images_bucket: str | None = Field(
+        default=None, description="GCS bucket for storing public images"
+    )
 
     # Todoist settings
     todoist_project_id: str = Field(description="ID of the Todoist project to process")

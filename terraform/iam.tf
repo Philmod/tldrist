@@ -38,3 +38,10 @@ resource "google_cloud_run_v2_service_iam_member" "scheduler_invoker" {
   role     = "roles/run.invoker"
   member   = "serviceAccount:${google_service_account.scheduler.email}"
 }
+
+# Allow tldrist service account to write images to GCS bucket
+resource "google_storage_bucket_iam_member" "tldrist_storage_writer" {
+  bucket = google_storage_bucket.images.name
+  role   = "roles/storage.objectCreator"
+  member = "serviceAccount:${google_service_account.tldrist.email}"
+}

@@ -23,10 +23,29 @@ resource "google_project_service" "apis" {
     "aiplatform.googleapis.com",
     "cloudbuild.googleapis.com",
     "artifactregistry.googleapis.com",
+    "storage.googleapis.com",
   ])
 
   service            = each.value
   disable_on_destroy = false
+}
+
+# GCS bucket for public images (used in email digests)
+resource "google_storage_bucket" "images" {
+  name          = "${var.project_id}-public"
+  location      = var.region
+  force_destroy = true
+
+  uniform_bucket_level_access = true
+
+  depends_on = [google_project_service.apis]
+}
+
+# Make bucket publicly readable
+resource "google_storage_bucket_iam_member" "public_read" {
+  bucket = google_storage_bucket.images.name
+  role   = "roles/storage.objectViewer"
+  member = "allUsers"
 }
 
 # Cloud Run service
@@ -59,6 +78,10 @@ resource "google_cloud_run_v2_service" "tldrist" {
       env {
         name  = "TLDRIST_TODOIST_PROJECT_ID"
         value = var.todoist_project_id
+      }
+      env {
+        name  = "TLDRIST_GCS_IMAGES_BUCKET"
+        value = google_storage_bucket.images.name
       }
       env {
         name = "TLDRIST_TODOIST_TOKEN"
@@ -108,6 +131,7 @@ resource "google_cloud_run_v2_service" "tldrist" {
     google_project_service.apis,
     google_secret_manager_secret_iam_member.todoist_token,
     google_secret_manager_secret_iam_member.gmail_app_password,
+    google_storage_bucket.images,
   ]
 }
 
