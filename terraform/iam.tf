@@ -62,3 +62,27 @@ resource "google_service_account_iam_member" "cloudbuild_act_as_tldrist" {
   role               = "roles/iam.serviceAccountUser"
   member             = "serviceAccount:${data.google_project.current.number}@cloudbuild.gserviceaccount.com"
 }
+
+# Custom role for Cloud Build P4SA - only permissions needed for GitHub connection
+resource "google_project_iam_custom_role" "cloudbuild_connection_secrets" {
+  role_id     = "cloudbuildConnectionSecrets"
+  title       = "Cloud Build Connection Secrets"
+  description = "Minimal permissions for Cloud Build to create GitHub connection secrets"
+  permissions = [
+    "secretmanager.secrets.create",
+    "secretmanager.secrets.delete",
+    "secretmanager.secrets.get",
+    "secretmanager.secrets.update",
+    "secretmanager.versions.add",
+    "secretmanager.versions.access",
+    "secretmanager.secrets.setIamPolicy",
+    "secretmanager.secrets.getIamPolicy",
+  ]
+}
+
+# Allow Cloud Build P4SA to manage connection secrets only
+resource "google_project_iam_member" "cloudbuild_connection_secrets" {
+  project = var.project_id
+  role    = google_project_iam_custom_role.cloudbuild_connection_secrets.id
+  member  = "serviceAccount:service-${data.google_project.current.number}@gcp-sa-cloudbuild.iam.gserviceaccount.com"
+}

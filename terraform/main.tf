@@ -24,6 +24,7 @@ resource "google_project_service" "apis" {
     "cloudbuild.googleapis.com",
     "artifactregistry.googleapis.com",
     "storage.googleapis.com",
+    "developerconnect.googleapis.com",
   ])
 
   service            = each.value
@@ -161,38 +162,61 @@ resource "google_cloud_scheduler_job" "weekly_digest" {
   depends_on = [google_project_service.apis]
 }
 
+# 2nd-gen GitHub connection (created via gcloud, imported into Terraform)
+# To recreate: gcloud builds connections create github github --region=europe-west1
+resource "google_cloudbuildv2_connection" "github" {
+  name     = "github"
+  location = var.region
+  project  = var.project_id
+
+  github_config {
+    app_installation_id = 636654
+  }
+
+  lifecycle {
+    ignore_changes = [github_config]
+  }
+}
+
+# Link the tldrist repository to the connection
+resource "google_cloudbuildv2_repository" "tldrist" {
+  name              = "tldrist"
+  location          = var.region
+  project           = var.project_id
+  parent_connection = google_cloudbuildv2_connection.github.name
+  remote_uri        = "https://github.com/Philmod/tldrist.git"
+}
+
 # Cloud Build trigger for automatic deployments on merge to main
 resource "google_cloudbuild_trigger" "main" {
   name     = "tldrist-main"
+  project  = var.project_id
   location = var.region
 
-  github {
-    owner = "philmod"
-    name  = "tldrist"
+  repository_event_config {
+    repository = google_cloudbuildv2_repository.tldrist.id
     push {
       branch = "^main$"
     }
   }
 
-  filename = "cloudbuild.yaml"
-
-  depends_on = [google_project_service.apis]
+  filename        = "cloudbuild.yaml"
+  service_account = "projects/${var.project_id}/serviceAccounts/${data.google_project.current.number}@cloudbuild.gserviceaccount.com"
 }
 
 # Cloud Build trigger for Pull Request checks (runs tests only)
 resource "google_cloudbuild_trigger" "pr" {
   name     = "tldrist-pr"
+  project  = var.project_id
   location = var.region
 
-  github {
-    owner = "philmod"
-    name  = "tldrist"
+  repository_event_config {
+    repository = google_cloudbuildv2_repository.tldrist.id
     pull_request {
       branch = "^main$"
     }
   }
 
-  filename = "cloudbuild-pr.yaml"
-
-  depends_on = [google_project_service.apis]
+  filename        = "cloudbuild-pr.yaml"
+  service_account = "projects/${var.project_id}/serviceAccounts/${data.google_project.current.number}@cloudbuild.gserviceaccount.com"
 }

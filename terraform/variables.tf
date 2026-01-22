@@ -47,3 +47,4 @@ variable "scheduler_article_max" {
   type        = number
   default     = 4
 }
+
