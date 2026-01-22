@@ -136,3 +136,21 @@ resource "google_cloud_scheduler_job" "weekly_digest" {
 
   depends_on = [google_project_service.apis]
 }
+
+# Cloud Build trigger for automatic deployments on merge to main
+resource "google_cloudbuild_trigger" "main" {
+  name     = "tldrist-main"
+  location = var.region
+
+  github {
+    owner = "philmod"
+    name  = "tldrist"
+    push {
+      branch = "^main$"
+    }
+  }
+
+  filename = "cloudbuild.yaml"
+
+  depends_on = [google_project_service.apis]
+}
