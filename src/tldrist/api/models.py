@@ -15,6 +15,7 @@ class SummarizeResponse(BaseModel):
     email_sent: bool = Field(description="Whether the digest email was sent")
     dry_run: bool = Field(description="Whether this was a dry run")
     skipped: bool = Field(default=False, description="Whether workflow was skipped due to min")
+    podcast_url: str | None = Field(default=None, description="URL of the generated podcast")
 
 
 class HealthResponse(BaseModel):

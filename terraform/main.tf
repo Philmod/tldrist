@@ -25,6 +25,7 @@ resource "google_project_service" "apis" {
     "artifactregistry.googleapis.com",
     "storage.googleapis.com",
     "developerconnect.googleapis.com",
+    "texttospeech.googleapis.com",
   ])
 
   service            = each.value
@@ -136,11 +137,11 @@ resource "google_cloud_run_v2_service" "tldrist" {
   ]
 }
 
-# Cloud Scheduler job - runs every Monday at 7am Paris time
+# Cloud Scheduler job - runs every weekday at 7am Paris time
 resource "google_cloud_scheduler_job" "weekly_digest" {
   name        = "tldrist-weekly-digest"
-  description = "Trigger TL;DRist weekly digest every day at 7am"
-  schedule    = "0 7 * * *"
+  description = "Trigger TL;DRist weekly digest every weekday at 7am"
+  schedule    = "0 7 * * 1-5"
   time_zone   = var.scheduler_timezone
 
   http_target {

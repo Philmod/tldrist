@@ -10,6 +10,7 @@ from tldrist.clients.gemini import GeminiClient
 from tldrist.clients.gmail import GmailClient
 from tldrist.clients.storage import ImageStorage
 from tldrist.clients.todoist import TodoistClient
+from tldrist.clients.tts import TTSClient
 from tldrist.config import get_settings
 from tldrist.services.orchestrator import Orchestrator
 from tldrist.utils.logging import get_logger
@@ -84,10 +85,12 @@ async def summarize(
                     gmail_address=settings.gmail_address,
                     app_password=settings.gmail_app_password,
                 ) as gmail:
-                    # Create ImageStorage if bucket is configured
+                    # Create ImageStorage and TTSClient if bucket is configured
                     image_storage = None
+                    tts_client = None
                     if settings.gcs_images_bucket:
                         image_storage = ImageStorage(settings.gcs_images_bucket)
+                        tts_client = TTSClient(project_id=settings.gcp_project_id)
 
                     orchestrator = Orchestrator(
                         todoist_client=todoist,
@@ -97,6 +100,7 @@ async def summarize(
                         recipient_email=settings.recipient_email,
                         todoist_project_id=settings.todoist_project_id,
                         image_storage=image_storage,
+                        tts_client=tts_client,
                     )
 
                     result = await orchestrator.run(
@@ -123,4 +127,5 @@ async def summarize(
         email_sent=result.email_sent,
         dry_run=result.dry_run,
         skipped=result.skipped,
+        podcast_url=result.podcast_url,
     )

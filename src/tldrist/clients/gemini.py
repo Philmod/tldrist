@@ -119,6 +119,36 @@ class GeminiClient:
         self._ensure_initialized()
         return GenerativeModel(self._model_name)
 
+    async def generate_content(
+        self,
+        prompt: str,
+        *,
+        temperature: float = 0.3,
+        max_output_tokens: int = 1024,
+    ) -> str:
+        """Generate content with custom parameters.
+
+        Args:
+            prompt: The prompt to send to the model.
+            temperature: Sampling temperature (0.0-1.0).
+            max_output_tokens: Maximum tokens in response.
+
+        Returns:
+            The generated text.
+
+        Raises:
+            RuntimeError: If the model returns no content.
+        """
+        model = self._get_model()
+        config = GenerationConfig(
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+        )
+        response = await model.generate_content_async(prompt, generation_config=config)
+        if not response.text:
+            raise RuntimeError("Model returned empty response")
+        return response.text
+
     async def summarize_article(self, title: str, content: str) -> str:
         """Generate a summary for an article.
 

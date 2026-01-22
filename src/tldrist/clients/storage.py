@@ -49,3 +49,28 @@ class ImageStorage:
         )
 
         return str(blob.public_url)
+
+    def upload_podcast(self, audio_data: bytes, date_str: str) -> str:
+        """Upload a podcast MP3 to GCS and return its public URL.
+
+        Args:
+            audio_data: The MP3 audio bytes.
+            date_str: Date string for the filename (e.g., '2024-01-15').
+
+        Returns:
+            The public URL of the uploaded podcast.
+        """
+        now = datetime.now()
+        blob_name = f"podcasts/{now:%Y/%m}/digest-{date_str}.mp3"
+
+        blob = self._bucket.blob(blob_name)
+        blob.upload_from_string(audio_data, content_type="audio/mpeg")
+
+        logger.info(
+            "Uploaded podcast to GCS",
+            bucket=self._bucket_name,
+            blob=blob_name,
+            size=len(audio_data),
+        )
+
+        return str(blob.public_url)

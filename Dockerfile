@@ -25,10 +25,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install runtime dependencies
+# Install runtime dependencies (including ffmpeg for pydub audio processing)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libxml2 \
     libxslt1.1 \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the virtual environment from builder
