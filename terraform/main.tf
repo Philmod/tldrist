@@ -120,7 +120,7 @@ resource "google_cloud_scheduler_job" "weekly_digest" {
 
   http_target {
     http_method = "POST"
-    uri         = "${google_cloud_run_v2_service.tldrist.uri}/api/v1/summarize?limit=${var.scheduler_article_limit}"
+    uri         = "${google_cloud_run_v2_service.tldrist.uri}/api/v1/summarize?min=${var.scheduler_article_min}&max=${var.scheduler_article_max}"
 
     oidc_token {
       service_account_email = google_service_account.scheduler.email
