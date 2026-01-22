@@ -131,8 +131,8 @@ class TTSClient:
         segments: list[tuple[str, str]] = []
 
         # parts will be: ['intro text', 'ALEX', 'alex text', 'SAM', 'sam text', ...]
-        # Skip the first part (text before any speaker tag)
-        i = 0 if parts[0].strip() and parts[0].strip() in ("ALEX", "SAM") else 1
+        # Skip parts[0] which is text before the first speaker tag
+        i = 1
 
         # Process pairs of (speaker, text)
         while i < len(parts) - 1:

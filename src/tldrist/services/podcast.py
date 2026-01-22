@@ -3,8 +3,6 @@
 import json
 from datetime import UTC, datetime
 
-from vertexai.generative_models import GenerationConfig
-
 from tldrist.clients.gemini import GeminiClient
 from tldrist.clients.storage import ImageStorage
 from tldrist.clients.tts import TTSClient
@@ -62,15 +60,11 @@ class PodcastService:
         articles_json = json.dumps(articles_data, indent=2)
         prompt = PODCAST_SCRIPT_PROMPT.format(articles_json=articles_json)
 
-        model = self._gemini._get_model()
-        config = GenerationConfig(
+        script = await self._gemini.generate_content(
+            prompt,
             temperature=0.7,
             max_output_tokens=4096,
         )
-
-        response = await model.generate_content_async(prompt, generation_config=config)
-
-        script = response.text
         logger.info("Podcast script generated", script_length=len(script))
         return script
 
