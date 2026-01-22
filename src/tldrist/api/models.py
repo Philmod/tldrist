@@ -14,6 +14,7 @@ class SummarizeResponse(BaseModel):
     tasks_update_failed: int = Field(description="Number of Todoist tasks that failed to update")
     email_sent: bool = Field(description="Whether the digest email was sent")
     dry_run: bool = Field(description="Whether this was a dry run")
+    skipped: bool = Field(default=False, description="Whether workflow was skipped due to min")
 
 
 class HealthResponse(BaseModel):

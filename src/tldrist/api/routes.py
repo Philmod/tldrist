@@ -23,8 +23,11 @@ def _determine_status(
     articles_processed: int,
     articles_failed: int,
     tasks_update_failed: int,
+    skipped: bool,
 ) -> str:
     """Determine the response status based on processing results."""
+    if skipped:
+        return "skipped"
     if articles_processed == 0 and tasks_found > 0:
         return "failed"
     if articles_failed > 0 or tasks_update_failed > 0:
@@ -38,10 +41,15 @@ async def health() -> HealthResponse:
     return HealthResponse(status="healthy", version=__version__)
 
 
-@router.post("/summarize", response_model=SummarizeResponse, dependencies=[Depends(verify_oidc_token)])
+@router.post(
+    "/summarize",
+    response_model=SummarizeResponse,
+    dependencies=[Depends(verify_oidc_token)],
+)
 async def summarize(
-    dry_run: bool = Query(default=False, description="Run without sending email or updating tasks"),
-    limit: int | None = Query(default=None, description="Maximum number of articles to process"),
+    dry_run: bool = Query(default=False, description="Run without sending email"),
+    min: int | None = Query(default=None, description="Minimum articles required"),
+    max: int | None = Query(default=None, description="Maximum articles to process"),
 ) -> SummarizeResponse:
     """Run the article summarization workflow.
 
@@ -54,12 +62,14 @@ async def summarize(
 
     Args:
         dry_run: If True, performs all steps except sending email and updating tasks.
-        limit: Maximum number of articles to process. If None, process all.
+        min: Minimum number of articles required to proceed. If there are fewer articles,
+            no email is sent and the response status is "skipped".
+        max: Maximum number of articles to process. If None, process all.
 
     Returns:
         SummarizeResponse with statistics about the run.
     """
-    logger.info("Summarize endpoint called", dry_run=dry_run, limit=limit)
+    logger.info("Summarize endpoint called", dry_run=dry_run, min=min, max=max)
 
     settings = get_settings()
 
@@ -82,13 +92,18 @@ async def summarize(
                         todoist_project_id=settings.todoist_project_id,
                     )
 
-                    result = await orchestrator.run(dry_run=dry_run or settings.dry_run, limit=limit)
+                    result = await orchestrator.run(
+                        dry_run=dry_run or settings.dry_run,
+                        min=min,
+                        max=max,
+                    )
 
     status = _determine_status(
         result.tasks_found,
         result.articles_processed,
         result.articles_failed,
         result.tasks_update_failed,
+        result.skipped,
     )
 
     return SummarizeResponse(
@@ -100,4 +115,5 @@ async def summarize(
         tasks_update_failed=result.tasks_update_failed,
         email_sent=result.email_sent,
         dry_run=result.dry_run,
+        skipped=result.skipped,
     )
