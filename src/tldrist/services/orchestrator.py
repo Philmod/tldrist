@@ -28,6 +28,7 @@ class OrchestrationResult:
     tasks_update_failed: int
     email_sent: bool
     dry_run: bool
+    skipped: bool = False
 
 
 class Orchestrator:
@@ -53,27 +54,58 @@ class Orchestrator:
         self._summarizer = SummarizerService(gemini_client)
         self._digest = DigestService(gemini_client, image_storage)
 
-    async def run(self, dry_run: bool = False, limit: int | None = None) -> OrchestrationResult:
+    async def run(
+        self,
+        dry_run: bool = False,
+        min: int | None = None,
+        max: int | None = None,
+    ) -> OrchestrationResult:
         """Run the complete workflow.
 
         Args:
             dry_run: If True, skip sending email and updating Todoist tasks.
-            limit: Maximum number of articles to process. If None, process all.
+            min: Minimum number of articles required to proceed. If there are fewer
+                articles available, the workflow is skipped and no email is sent.
+            max: Maximum number of articles to process. If None, process all.
 
         Returns:
             OrchestrationResult with statistics about the run.
         """
-        logger.info("Starting orchestration", dry_run=dry_run, limit=limit, project_id=self._project_id)
+        logger.info(
+            "Starting orchestration",
+            dry_run=dry_run,
+            min=min,
+            max=max,
+            project_id=self._project_id,
+        )
 
         # Get tasks with URLs from the configured project
         tasks = await self._todoist.get_tasks(self._project_id)
         tasks_with_urls = [t for t in tasks if t.url is not None]
         logger.info("Found tasks with URLs", count=len(tasks_with_urls))
 
-        # Apply limit if specified
-        if limit is not None:
-            tasks_with_urls = tasks_with_urls[:limit]
-            logger.info("Applied limit", limit=limit, tasks_to_process=len(tasks_with_urls))
+        # Check minimum threshold
+        if min is not None and len(tasks_with_urls) < min:
+            logger.info(
+                "Skipping workflow: not enough articles",
+                found=len(tasks_with_urls),
+                min=min,
+            )
+            return OrchestrationResult(
+                tasks_found=len(tasks_with_urls),
+                articles_processed=0,
+                articles_failed=0,
+                tasks_updated=0,
+                tasks_update_failed=0,
+                email_sent=False,
+                dry_run=dry_run,
+                skipped=True,
+            )
+
+        # Apply max limit if specified
+        if max is not None:
+            tasks_with_urls = tasks_with_urls[:max]
+            logger.info("Applied max limit", max=max, tasks_to_process=len(tasks_with_urls))
 
         if not tasks_with_urls:
             logger.info("No tasks with URLs found, sending empty digest")

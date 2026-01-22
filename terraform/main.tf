@@ -144,7 +144,7 @@ resource "google_cloud_scheduler_job" "weekly_digest" {
 
   http_target {
     http_method = "POST"
-    uri         = "${google_cloud_run_v2_service.tldrist.uri}/api/v1/summarize?limit=${var.scheduler_article_limit}"
+    uri         = "${google_cloud_run_v2_service.tldrist.uri}/api/v1/summarize?min=${var.scheduler_article_min}&max=${var.scheduler_article_max}"
 
     oidc_token {
       service_account_email = google_service_account.scheduler.email
@@ -157,6 +157,42 @@ resource "google_cloud_scheduler_job" "weekly_digest" {
     min_backoff_duration = "5s"
     max_backoff_duration = "300s"
   }
+
+  depends_on = [google_project_service.apis]
+}
+
+# Cloud Build trigger for automatic deployments on merge to main
+resource "google_cloudbuild_trigger" "main" {
+  name     = "tldrist-main"
+  location = var.region
+
+  github {
+    owner = "philmod"
+    name  = "tldrist"
+    push {
+      branch = "^main$"
+    }
+  }
+
+  filename = "cloudbuild.yaml"
+
+  depends_on = [google_project_service.apis]
+}
+
+# Cloud Build trigger for Pull Request checks (runs tests only)
+resource "google_cloudbuild_trigger" "pr" {
+  name     = "tldrist-pr"
+  location = var.region
+
+  github {
+    owner = "philmod"
+    name  = "tldrist"
+    pull_request {
+      branch = "^main$"
+    }
+  }
+
+  filename = "cloudbuild-pr.yaml"
 
   depends_on = [google_project_service.apis]
 }

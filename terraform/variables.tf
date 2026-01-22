@@ -36,8 +36,14 @@ variable "image_tag" {
   default     = "latest"
 }
 
-variable "scheduler_article_limit" {
-  description = "Maximum number of articles to process per scheduled digest"
+variable "scheduler_article_min" {
+  description = "Minimum number of articles required to send a digest"
   type        = number
   default     = 3
+}
+
+variable "scheduler_article_max" {
+  description = "Maximum number of articles to process per scheduled digest"
+  type        = number
+  default     = 4
 }

@@ -45,3 +45,20 @@ resource "google_storage_bucket_iam_member" "tldrist_storage_writer" {
   role   = "roles/storage.objectCreator"
   member = "serviceAccount:${google_service_account.tldrist.email}"
 }
+
+# Cloud Build service account permissions for CI/CD
+data "google_project" "current" {}
+
+# Allow Cloud Build to deploy to Cloud Run
+resource "google_project_iam_member" "cloudbuild_run_developer" {
+  project = var.project_id
+  role    = "roles/run.developer"
+  member  = "serviceAccount:${data.google_project.current.number}@cloudbuild.gserviceaccount.com"
+}
+
+# Allow Cloud Build to act as the Cloud Run service account
+resource "google_service_account_iam_member" "cloudbuild_act_as_tldrist" {
+  service_account_id = google_service_account.tldrist.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${data.google_project.current.number}@cloudbuild.gserviceaccount.com"
+}
