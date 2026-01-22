@@ -23,16 +23,19 @@ class DigestService:
     async def compose_digest(
         self,
         articles: list[ProcessedArticle],
+        podcast_url: str | None = None,
     ) -> tuple[str, str]:
         """Compose the weekly digest email.
 
         Args:
             articles: List of processed articles to include.
+            podcast_url: Optional URL to the podcast audio file.
 
         Returns:
             Tuple of (subject, html_content).
         """
-        logger.info("Composing digest", article_count=len(articles))
+        has_podcast = podcast_url is not None
+        logger.info("Composing digest", article_count=len(articles), has_podcast=has_podcast)
 
         if not articles:
             return self._empty_digest()
@@ -44,7 +47,7 @@ class DigestService:
 
         intro = await self._gemini.generate_digest_intro(summaries)
         subject = self._generate_subject()
-        html = self._render_html(intro, articles)
+        html = self._render_html(intro, articles, podcast_url)
 
         logger.info("Digest composed", subject=subject)
         return subject, html
@@ -68,13 +71,20 @@ class DigestService:
         date_str = datetime.now(UTC).strftime("%B %d, %Y")
         return f"Your Weekly Reading Digest - {date_str}"
 
-    def _render_html(self, intro: str, articles: list[ProcessedArticle]) -> str:
+    def _render_html(
+        self, intro: str, articles: list[ProcessedArticle], podcast_url: str | None = None
+    ) -> str:
         """Render the digest as HTML."""
         # Escape intro text from LLM to prevent XSS
         safe_intro = html.escape(intro)
         articles_html = "\n".join(
             self._render_article(a) for a in articles
         )
+
+        # Render podcast section if available
+        podcast_html = ""
+        if podcast_url:
+            podcast_html = self._render_podcast_section(podcast_url)
 
         return f"""<!DOCTYPE html>
 <html>
@@ -158,6 +168,33 @@ p {{
     font-size: 0.9em;
     color: #666;
 }}
+.podcast-section {{
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 30px;
+    color: white;
+}}
+.podcast-section h3 {{
+    margin: 0 0 10px 0;
+    font-size: 1.1em;
+}}
+.podcast-section p {{
+    margin: 0 0 15px 0;
+    opacity: 0.9;
+}}
+.podcast-link {{
+    display: inline-block;
+    background: white;
+    color: #667eea;
+    padding: 10px 20px;
+    border-radius: 25px;
+    text-decoration: none;
+    font-weight: 600;
+}}
+.podcast-link:hover {{
+    opacity: 0.9;
+}}
 </style>
 </head>
 <body>
@@ -166,6 +203,8 @@ p {{
 <div class="intro">
 {safe_intro}
 </div>
+
+{podcast_html}
 
 <h2>This Week's Articles</h2>
 
@@ -229,4 +268,20 @@ p {{
         return f"""<div class="figure-container">
 <img src="{image_url}" class="article-figure" alt="Key figure from paper">
 {caption_html}
+</div>"""
+
+    def _render_podcast_section(self, podcast_url: str) -> str:
+        """Render the podcast section HTML.
+
+        Args:
+            podcast_url: The public URL of the podcast MP3.
+
+        Returns:
+            HTML string for the podcast section.
+        """
+        safe_url = html.escape(podcast_url)
+        return f"""<div class="podcast-section">
+<h3>Listen to This Week's Digest</h3>
+<p>Hear Alex and Sam discuss this week's articles in our AI-generated podcast.</p>
+<a href="{safe_url}" class="podcast-link">Listen Now</a>
 </div>"""

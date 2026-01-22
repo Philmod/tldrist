@@ -10,7 +10,9 @@ from tldrist.clients.gemini import GeminiClient
 from tldrist.clients.gmail import GmailClient
 from tldrist.clients.storage import ImageStorage
 from tldrist.clients.todoist import TodoistClient, TodoistTask
+from tldrist.clients.tts import TTSClient
 from tldrist.services.digest import DigestService
+from tldrist.services.podcast import PodcastService
 from tldrist.services.summarizer import ProcessedArticle, SummarizerService
 from tldrist.utils.logging import get_logger
 
@@ -29,6 +31,7 @@ class OrchestrationResult:
     email_sent: bool
     dry_run: bool
     skipped: bool = False
+    podcast_url: str | None = None
 
 
 class Orchestrator:
@@ -43,6 +46,8 @@ class Orchestrator:
         recipient_email: str,
         todoist_project_id: str,
         image_storage: ImageStorage | None = None,
+        tts_client: TTSClient | None = None,
+        podcast_enabled: bool = True,
     ) -> None:
         self._todoist = todoist_client
         self._fetcher = article_fetcher
@@ -50,9 +55,13 @@ class Orchestrator:
         self._gmail = gmail_client
         self._recipient_email = recipient_email
         self._project_id = todoist_project_id
+        self._storage = image_storage
+        self._tts_client = tts_client
+        self._podcast_enabled = podcast_enabled
 
         self._summarizer = SummarizerService(gemini_client)
         self._digest = DigestService(gemini_client, image_storage)
+        self._podcast = PodcastService(gemini_client) if podcast_enabled else None
 
     async def run(
         self,
@@ -151,8 +160,26 @@ class Orchestrator:
             failed=failed_count,
         )
 
+        # Generate podcast if enabled and we have articles
+        podcast_url = None
+        if (
+            self._podcast_enabled
+            and self._podcast
+            and self._tts_client
+            and self._storage
+            and processed_articles
+        ):
+            try:
+                podcast_url = await self._podcast.generate_podcast(
+                    processed_articles, self._tts_client, self._storage
+                )
+                logger.info("Podcast generated", url=podcast_url)
+            except Exception as e:
+                logger.error("Failed to generate podcast", error=str(e))
+                # Continue without podcast - don't fail the whole digest
+
         # Compose and send digest
-        subject, html = await self._digest.compose_digest(processed_articles)
+        subject, html = await self._digest.compose_digest(processed_articles, podcast_url)
 
         tasks_updated = 0
         tasks_update_failed = 0
@@ -182,6 +209,7 @@ class Orchestrator:
             tasks_update_failed=tasks_update_failed,
             email_sent=not dry_run,
             dry_run=dry_run,
+            podcast_url=podcast_url,
         )
 
     async def _process_task(self, task: TodoistTask) -> ProcessedArticle | None:
