@@ -3,10 +3,11 @@
 import asyncio
 import tempfile
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from tldrist.clients.article import ArticleFetcher, is_arxiv_url
-from tldrist.clients.gemini import GeminiClient
+from tldrist.clients.gemini import ArticleSummary, GeminiClient
 from tldrist.clients.gmail import GmailClient
 from tldrist.clients.storage import ImageStorage
 from tldrist.clients.todoist import TodoistClient, TodoistTask
@@ -178,8 +179,32 @@ class Orchestrator:
                 logger.error("Failed to generate podcast", error=str(e))
                 # Continue without podcast - don't fail the whole digest
 
+        # Generate and upload web page version of the digest
+        web_page_url = None
+        if self._storage and processed_articles:
+            try:
+                # Generate intro for the web page
+                summaries = [
+                    ArticleSummary(url=a.url, title=a.title, summary=a.summary)
+                    for a in processed_articles
+                ]
+                intro = await self._gemini.generate_digest_intro(summaries)
+
+                # Render the web-friendly HTML
+                web_html = self._digest.render_web_html(intro, processed_articles, podcast_url)
+
+                # Upload to GCS
+                date_str = datetime.now(UTC).strftime("%Y-%m-%d")
+                web_page_url = self._storage.upload_html(web_html, date_str)
+                logger.info("Web digest page uploaded", url=web_page_url)
+            except Exception as e:
+                logger.error("Failed to generate web page", error=str(e))
+                # Continue without web page - don't fail the whole digest
+
         # Compose and send digest
-        subject, html = await self._digest.compose_digest(processed_articles, podcast_url)
+        subject, html = await self._digest.compose_digest(
+            processed_articles, podcast_url, web_page_url
+        )
 
         tasks_updated = 0
         tasks_update_failed = 0
