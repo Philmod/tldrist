@@ -44,6 +44,17 @@ uv run uvicorn tldrist.main:app --reload
 curl -X POST http://localhost:8000/api/v1/summarize?dry_run=true
 ```
 
+### Development
+
+Requires dev dependencies: `uv sync --extra dev`
+
+```bash
+uv run pytest              # Run tests
+uv run ruff check .        # Lint
+uv run ruff format .       # Format
+uv run mypy src            # Type check
+```
+
 ### Deployment
 
 ```bash

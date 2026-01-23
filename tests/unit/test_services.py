@@ -82,7 +82,7 @@ class TestDigestService:
         """Should handle empty article list."""
         subject, html = await service.compose_digest([])
 
-        assert "Weekly Reading Digest" in subject
+        assert "tl;drist reading digest" in subject
         assert "No articles were found" in html
 
     async def test_compose_digest_with_articles(
@@ -108,7 +108,7 @@ class TestDigestService:
 
         subject, html = await service.compose_digest(articles)
 
-        assert "Weekly Reading Digest" in subject
+        assert "tl;drist reading digest" in subject
         assert "Article One" in html
         assert "Article Two" in html
         assert "Summary of article one." in html
