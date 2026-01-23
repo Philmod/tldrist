@@ -59,7 +59,7 @@ class DigestService:
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-<h1 style="color: #333;">Your Weekly Reading Digest</h1>
+<h1 style="color: #333;">tl;drist reading digest</h1>
 <p>No articles were found in your Read list this week.</p>
 <p>Add some articles to your Todoist "Read" project to receive summaries next week!</p>
 </body>
@@ -69,7 +69,7 @@ class DigestService:
     def _generate_subject(self) -> str:
         """Generate the email subject line."""
         date_str = datetime.now(UTC).strftime("%B %d, %Y")
-        return f"Your Weekly Reading Digest - {date_str}"
+        return f"tl;drist reading digest - {date_str}"
 
     def _render_html(
         self, intro: str, articles: list[ProcessedArticle], podcast_url: str | None = None
@@ -198,7 +198,7 @@ p {{
 </style>
 </head>
 <body>
-<h1>Your Weekly Reading Digest</h1>
+<h1>tl;drist reading digest</h1>
 
 <div class="intro">
 {safe_intro}
