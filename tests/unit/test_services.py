@@ -114,3 +114,67 @@ class TestDigestService:
         assert "Summary of article one." in html
         assert "https://example.com/1" in html
         mock_gemini.generate_digest_intro.assert_called_once()
+
+    async def test_compose_digest_with_web_page_url(
+        self, service: DigestService, mock_gemini: MagicMock
+    ) -> None:
+        """Should include web page link in email when URL provided."""
+        articles = [
+            ProcessedArticle(
+                task_id="1",
+                url="https://example.com/1",
+                title="Article One",
+                summary="Summary of article one.",
+                processed_at=datetime.now(timezone.utc),
+            ),
+        ]
+
+        subject, html = await service.compose_digest(
+            articles, web_page_url="https://storage.example.com/digest.html"
+        )
+
+        assert "View this digest in your browser" in html
+        assert "https://storage.example.com/digest.html" in html
+
+    def test_render_web_html(self, service: DigestService) -> None:
+        """Should render web-friendly HTML with Medium-like styling."""
+        articles = [
+            ProcessedArticle(
+                task_id="1",
+                url="https://example.com/1",
+                title="Article One",
+                summary="Summary of article one.",
+                processed_at=datetime.now(timezone.utc),
+            ),
+        ]
+
+        html = service.render_web_html("Welcome to this week's digest.", articles)
+
+        # Check for Medium-like font
+        assert "Source Serif 4" in html
+        assert "Source Sans 3" in html
+        # Check for article content
+        assert "Article One" in html
+        assert "Summary of article one." in html
+        # Check for spacious styling
+        assert "line-height: 1.8" in html
+        assert "max-width: 680px" in html
+
+    def test_render_web_html_with_podcast(self, service: DigestService) -> None:
+        """Should include podcast section in web HTML when URL provided."""
+        articles = [
+            ProcessedArticle(
+                task_id="1",
+                url="https://example.com/1",
+                title="Article One",
+                summary="Summary.",
+                processed_at=datetime.now(timezone.utc),
+            ),
+        ]
+
+        html = service.render_web_html(
+            "Intro", articles, podcast_url="https://storage.example.com/podcast.mp3"
+        )
+
+        assert "Listen to This Week's Digest" in html
+        assert "https://storage.example.com/podcast.mp3" in html

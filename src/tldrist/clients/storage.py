@@ -74,3 +74,30 @@ class ImageStorage:
         )
 
         return str(blob.public_url)
+
+    def upload_html(self, html_content: str, date_str: str) -> str:
+        """Upload an HTML page to GCS and return its public URL.
+
+        Args:
+            html_content: The HTML content as a string.
+            date_str: Date string for the filename (e.g., '2024-01-15').
+
+        Returns:
+            The public URL of the uploaded HTML page.
+        """
+        now = datetime.now()
+        blob_name = f"digests/{now:%Y/%m}/digest-{date_str}.html"
+
+        blob = self._bucket.blob(blob_name)
+        blob.upload_from_string(
+            html_content.encode("utf-8"), content_type="text/html; charset=utf-8"
+        )
+
+        logger.info(
+            "Uploaded HTML digest to GCS",
+            bucket=self._bucket_name,
+            blob=blob_name,
+            size=len(html_content),
+        )
+
+        return str(blob.public_url)
