@@ -36,6 +36,13 @@ resource "google_project_iam_member" "tldrist_aiplatform" {
   member  = "serviceAccount:${google_service_account.tldrist.email}"
 }
 
+# Allow tldrist service account to use project services (TTS API)
+resource "google_project_iam_member" "tldrist_service_usage" {
+  project = var.project_id
+  role    = "roles/serviceusage.serviceUsageConsumer"
+  member  = "serviceAccount:${google_service_account.tldrist.email}"
+}
+
 # Allow scheduler to invoke Cloud Run
 resource "google_cloud_run_v2_service_iam_member" "scheduler_invoker" {
   project  = var.project_id
@@ -48,7 +55,7 @@ resource "google_cloud_run_v2_service_iam_member" "scheduler_invoker" {
 # Allow tldrist service account to write images to GCS bucket
 resource "google_storage_bucket_iam_member" "tldrist_storage_writer" {
   bucket = google_storage_bucket.images.name
-  role   = "roles/storage.objectCreator"
+  role   = "roles/storage.objectUser"
   member = "serviceAccount:${google_service_account.tldrist.email}"
 }
 
