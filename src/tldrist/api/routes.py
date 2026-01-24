@@ -124,6 +124,8 @@ async def summarize(
         articles_failed=result.articles_failed,
         tasks_updated=result.tasks_updated,
         tasks_update_failed=result.tasks_update_failed,
+        tasks_closed=result.tasks_closed,
+        tasks_close_failed=result.tasks_close_failed,
         email_sent=result.email_sent,
         dry_run=result.dry_run,
         skipped=result.skipped,

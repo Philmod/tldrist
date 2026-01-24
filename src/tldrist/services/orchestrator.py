@@ -29,6 +29,8 @@ class OrchestrationResult:
     articles_failed: int
     tasks_updated: int
     tasks_update_failed: int
+    tasks_closed: int
+    tasks_close_failed: int
     email_sent: bool
     dry_run: bool
     skipped: bool = False
@@ -107,6 +109,8 @@ class Orchestrator:
                 articles_failed=0,
                 tasks_updated=0,
                 tasks_update_failed=0,
+                tasks_closed=0,
+                tasks_close_failed=0,
                 email_sent=False,
                 dry_run=dry_run,
                 skipped=True,
@@ -133,6 +137,8 @@ class Orchestrator:
                 articles_failed=0,
                 tasks_updated=0,
                 tasks_update_failed=0,
+                tasks_closed=0,
+                tasks_close_failed=0,
                 email_sent=not dry_run,
                 dry_run=dry_run,
             )
@@ -208,17 +214,23 @@ class Orchestrator:
 
         tasks_updated = 0
         tasks_update_failed = 0
+        tasks_closed = 0
+        tasks_close_failed = 0
 
         if not dry_run:
             self._gmail.send_email(self._recipient_email, subject, html)
             logger.info("Digest email sent", recipient=self._recipient_email)
 
-            # Update Todoist tasks with summaries
-            tasks_updated, tasks_update_failed = await self._update_tasks(processed_articles)
+            # Update Todoist tasks with summaries and close them
+            tasks_updated, tasks_update_failed, tasks_closed, tasks_close_failed = (
+                await self._update_and_close_tasks(processed_articles)
+            )
             logger.info(
-                "Tasks updated",
+                "Tasks updated and closed",
                 updated=tasks_updated,
-                failed=tasks_update_failed,
+                update_failed=tasks_update_failed,
+                closed=tasks_closed,
+                close_failed=tasks_close_failed,
             )
         else:
             logger.info("Dry run - generated email subject", subject=subject)
@@ -232,6 +244,8 @@ class Orchestrator:
             articles_failed=failed_count,
             tasks_updated=tasks_updated,
             tasks_update_failed=tasks_update_failed,
+            tasks_closed=tasks_closed,
+            tasks_close_failed=tasks_close_failed,
             email_sent=not dry_run,
             dry_run=dry_run,
             podcast_url=podcast_url,
@@ -269,15 +283,21 @@ class Orchestrator:
 
         return await self._summarizer.summarize_arxiv(task.id, arxiv_content)
 
-    async def _update_tasks(self, articles: list[ProcessedArticle]) -> tuple[int, int]:
-        """Update Todoist tasks with their summaries.
+    async def _update_and_close_tasks(
+        self, articles: list[ProcessedArticle]
+    ) -> tuple[int, int, int, int]:
+        """Update Todoist tasks with their summaries and close them.
 
         Returns:
-            Tuple of (updated_count, failed_count).
+            Tuple of (updated_count, update_failed_count, closed_count, close_failed_count).
         """
         updated = 0
-        failed = 0
+        update_failed = 0
+        closed = 0
+        close_failed = 0
+
         for article in articles:
+            # First update the task description
             try:
                 description = self._summarizer.format_task_description(article)
                 await self._todoist.update_task_description(article.task_id, description)
@@ -288,8 +308,23 @@ class Orchestrator:
                     task_id=article.task_id,
                     error=str(e),
                 )
-                failed += 1
-        return updated, failed
+                update_failed += 1
+                # Skip closing if update failed
+                continue
+
+            # Then close the task
+            try:
+                await self._todoist.close_task(article.task_id)
+                closed += 1
+            except Exception as e:
+                logger.error(
+                    "Failed to close task",
+                    task_id=article.task_id,
+                    error=str(e),
+                )
+                close_failed += 1
+
+        return updated, update_failed, closed, close_failed
 
     def _write_dry_run_html(self, html: str) -> Path:
         """Write HTML to a temporary file for dry run preview.

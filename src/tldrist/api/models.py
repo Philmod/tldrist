@@ -12,6 +12,8 @@ class SummarizeResponse(BaseModel):
     articles_failed: int = Field(description="Number of articles that failed to process")
     tasks_updated: int = Field(description="Number of Todoist tasks successfully updated")
     tasks_update_failed: int = Field(description="Number of Todoist tasks that failed to update")
+    tasks_closed: int = Field(description="Number of Todoist tasks successfully closed")
+    tasks_close_failed: int = Field(description="Number of Todoist tasks that failed to close")
     email_sent: bool = Field(description="Whether the digest email was sent")
     dry_run: bool = Field(description="Whether this was a dry run")
     skipped: bool = Field(default=False, description="Whether workflow was skipped due to min")

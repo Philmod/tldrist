@@ -105,3 +105,15 @@ class TestTodoistClient:
         body = json.loads(request.content)
         assert body["description"] == "New summary"
         await client.close()
+
+    @respx.mock
+    async def test_close_task(self, client: TodoistClient) -> None:
+        """Should close a task."""
+        route = respx.post("https://api.todoist.com/api/v1/tasks/task-456/close").mock(
+            return_value=Response(204)
+        )
+
+        await client.close_task("task-456")
+
+        assert route.called
+        await client.close()
