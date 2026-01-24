@@ -2,6 +2,20 @@
 
 Daily digest of Todoist Read list articles summarized with Gemini.
 
+## Example
+
+1. Articles saved in your Todoist "Read" project:
+
+![Todoist Read List](doc/images/todoist.JPEG)
+
+2. Daily digest email with summaries:
+
+![Email Digest](doc/images/email.JPEG)
+
+3. HTML page with full summaries:
+
+![HTML Page](doc/images/html.JPEG)
+
 ## Features
 
 - Fetches articles from your Todoist "Read" project
