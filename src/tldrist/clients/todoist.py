@@ -96,3 +96,14 @@ class TodoistClient:
         )
         response.raise_for_status()
         logger.info("Task description updated", task_id=task_id)
+
+    async def close_task(self, task_id: str) -> None:
+        """Close (complete) a task.
+
+        Args:
+            task_id: The ID of the task to close.
+        """
+        logger.info("Closing task", task_id=task_id)
+        response = await self._client.post(f"/tasks/{task_id}/close")
+        response.raise_for_status()
+        logger.info("Task closed", task_id=task_id)
