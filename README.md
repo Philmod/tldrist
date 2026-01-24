@@ -4,24 +4,18 @@ Daily digest of Todoist Read list articles summarized with Gemini.
 
 ## Example
 
-1. Articles saved in your Todoist "Read" project:
-
-![Todoist Read List](doc/images/todoist.JPEG)
-
-2. Daily digest email with summaries:
-
-![Email Digest](doc/images/email.JPEG)
-
-3. HTML page with full summaries:
-
-![HTML Page](doc/images/html.JPEG)
+| Todoist Read List | Email Digest | HTML Page |
+|:-----------------:|:------------:|:---------:|
+| ![Todoist](doc/images/todoist.JPEG) | ![Email](doc/images/email.JPEG) | ![HTML](doc/images/html.JPEG) |
 
 ## Features
 
 - Fetches articles from your Todoist "Read" project
 - Extracts content using trafilatura and readability-lxml
-- Generates summaries using Vertex AI Gemini 2.5 Pro
+- Generates summaries using Vertex AI Gemini 2.0 Flash
 - Supports arXiv papers with PDF summarization and figure extraction
+- Generates AI podcast conversations with Text-to-Speech audio
+- Creates a responsive HTML web page of the digest
 - Sends a daily digest email via Gmail SMTP
 - Updates Todoist tasks with their summaries
 
@@ -35,6 +29,8 @@ Daily digest of Todoist Read list articles summarized with Gemini.
   - Secret Manager API enabled
   - Cloud Run API enabled
   - Cloud Scheduler API enabled
+  - Cloud Text-to-Speech API enabled (for podcast generation)
+  - Cloud Storage bucket (for podcast audio and web pages)
 - Todoist account with API token
 - Gmail account with App Password
 
@@ -50,6 +46,8 @@ export TLDRIST_GCP_REGION=europe-west1
 export TLDRIST_GMAIL_ADDRESS=your-gmail@gmail.com
 export TLDRIST_RECIPIENT_EMAIL=you@example.com
 export TLDRIST_TODOIST_PROJECT_ID=your-project-id
+export TLDRIST_GCS_IMAGES_BUCKET=your-bucket  # Optional: for podcast and web pages
+export TLDRIST_SKIP_AUTH=true                 # Skip OIDC auth for local dev
 
 # Run locally
 uv run uvicorn tldrist.main:app --reload
@@ -90,15 +88,18 @@ terraform apply
 
 ### POST /api/v1/summarize
 
-Triggers the article summarization workflow.
+Triggers the article summarization workflow. Requires OIDC authentication (Cloud Scheduler token).
 
 Query Parameters:
 - `dry_run` (optional, default: false): Run without sending email or updating tasks
-- `limit` (optional): Maximum number of articles to process
+- `min` (optional): Minimum articles required; skips if fewer found
+- `max` (optional): Maximum number of articles to process
+
+Response includes: status, tasks found, articles processed/failed, email sent, and podcast URL.
 
 ### GET /api/v1/health
 
-Health check endpoint.
+Health check endpoint. Returns status and version.
 
 ## License
 
