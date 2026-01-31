@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from tldrist.clients.gemini import GeminiClient
 from tldrist.clients.storage import ImageStorage
 from tldrist.clients.tts import TTSClient
-from tldrist.config import PODCAST_WORD_RANGE
+from tldrist.config import get_settings
 from tldrist.services.summarizer import ProcessedArticle
 from tldrist.utils.logging import get_logger
 
@@ -22,7 +22,7 @@ Guidelines:
 - Cover all articles, spending more time on the most interesting ones
 - Start with a brief intro welcoming listeners to the weekly digest
 - End with a sign-off thanking listeners and encouraging them to check out the articles
-- Total length: """ + f"{PODCAST_WORD_RANGE[0]}-{PODCAST_WORD_RANGE[1]} words (approximately {PODCAST_WORD_RANGE[0] // 100}-{PODCAST_WORD_RANGE[1] // 100} minutes when spoken)" + """
+- Total length: {podcast_word_min}-{podcast_word_max} words (approximately {podcast_minutes_min}-{podcast_minutes_max} minutes when spoken)
 - Format each line as: [ALEX]: text here  or  [SAM]: text here
 - Do not include any stage directions or non-spoken text
 
@@ -59,7 +59,14 @@ class PodcastService:
             for article in articles
         ]
         articles_json = json.dumps(articles_data, indent=2)
-        prompt = PODCAST_SCRIPT_PROMPT.format(articles_json=articles_json)
+        settings = get_settings()
+        prompt = PODCAST_SCRIPT_PROMPT.format(
+            articles_json=articles_json,
+            podcast_word_min=settings.podcast_word_min,
+            podcast_word_max=settings.podcast_word_max,
+            podcast_minutes_min=settings.podcast_word_min // 100,
+            podcast_minutes_max=settings.podcast_word_max // 100,
+        )
 
         script = await self._gemini.generate_content(
             prompt,

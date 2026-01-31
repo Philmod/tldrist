@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import vertexai
 from vertexai.generative_models import GenerationConfig, GenerativeModel, Part
 
-from tldrist.config import SUMMARY_PARAGRAPHS
+from tldrist.config import get_settings
 from tldrist.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 SUMMARIZE_PROMPT = """You are a helpful assistant that summarizes articles concisely.
 
 Please provide a summary of the following article. The summary should:
-- Be """ + SUMMARY_PARAGRAPHS + """ paragraphs long
+- Be {summary_paragraphs} paragraphs long
 - Capture the main points and key takeaways
 - Be written in a clear, informative style
 - Include any important facts, figures, or conclusions
@@ -38,7 +38,7 @@ Introduction:"""
 SUMMARIZE_PDF_PROMPT = """You are a helpful assistant that summarizes academic papers concisely.
 
 Please provide a summary of the following academic paper. The summary should:
-- Be """ + SUMMARY_PARAGRAPHS + """ paragraphs long
+- Be {summary_paragraphs} paragraphs long
 - Explain the paper's main contributions and key findings
 - Highlight the methodology and approach used
 - Mention any important results, figures, or conclusions
@@ -163,7 +163,11 @@ class GeminiClient:
         logger.info("Summarizing article", title=title)
 
         model = self._get_model()
-        prompt = SUMMARIZE_PROMPT.format(title=title, content=content[:50000])
+        settings = get_settings()
+        prompt = SUMMARIZE_PROMPT.format(
+            title=title, content=content[:50000],
+            summary_paragraphs=settings.summary_paragraphs,
+        )
 
         config = GenerationConfig(
             temperature=0.3,
@@ -220,7 +224,10 @@ class GeminiClient:
         model = self._get_model()
 
         pdf_part = Part.from_data(data=pdf_bytes, mime_type="application/pdf")
-        prompt = SUMMARIZE_PDF_PROMPT.format(title=title)
+        settings = get_settings()
+        prompt = SUMMARIZE_PDF_PROMPT.format(
+            title=title, summary_paragraphs=settings.summary_paragraphs,
+        )
 
         config = GenerationConfig(
             temperature=0.3,

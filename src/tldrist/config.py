@@ -6,12 +6,6 @@ from functools import lru_cache
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Podcast script target word range (approx 100 words per minute spoken)
-PODCAST_WORD_RANGE = (800, 1200)
-
-# Article/PDF summary target paragraph range
-SUMMARY_PARAGRAPHS = "2-4"
-
 # Simple email regex - not exhaustive but catches obvious errors
 EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -43,6 +37,11 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", description="Logging level")
     dry_run: bool = Field(default=False, description="Run without sending email or updating tasks")
     skip_auth: bool = Field(default=False, description="Skip OIDC auth (local testing only)")
+
+    # Prompt length settings
+    podcast_word_min: int = Field(default=800, description="Podcast script minimum word count")
+    podcast_word_max: int = Field(default=1200, description="Podcast script maximum word count")
+    summary_paragraphs: str = Field(default="2-4", description="Target paragraph range for summaries")
 
     @field_validator("gcp_project_id")
     @classmethod
