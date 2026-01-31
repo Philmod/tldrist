@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import vertexai
 from vertexai.generative_models import GenerationConfig, GenerativeModel, Part
 
+from tldrist.config import SUMMARY_PARAGRAPHS
 from tldrist.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -13,7 +14,7 @@ logger = get_logger(__name__)
 SUMMARIZE_PROMPT = """You are a helpful assistant that summarizes articles concisely.
 
 Please provide a summary of the following article. The summary should:
-- Be 2-4 paragraphs long
+- Be """ + SUMMARY_PARAGRAPHS + """ paragraphs long
 - Capture the main points and key takeaways
 - Be written in a clear, informative style
 - Include any important facts, figures, or conclusions
@@ -37,7 +38,7 @@ Introduction:"""
 SUMMARIZE_PDF_PROMPT = """You are a helpful assistant that summarizes academic papers concisely.
 
 Please provide a summary of the following academic paper. The summary should:
-- Be 3-5 paragraphs long
+- Be """ + SUMMARY_PARAGRAPHS + """ paragraphs long
 - Explain the paper's main contributions and key findings
 - Highlight the methodology and approach used
 - Mention any important results, figures, or conclusions

@@ -6,6 +6,12 @@ from functools import lru_cache
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Podcast script target word range (approx 100 words per minute spoken)
+PODCAST_WORD_RANGE = (800, 1200)
+
+# Article/PDF summary target paragraph range
+SUMMARY_PARAGRAPHS = "2-4"
+
 # Simple email regex - not exhaustive but catches obvious errors
 EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 

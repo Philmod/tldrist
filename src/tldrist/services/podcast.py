@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from tldrist.clients.gemini import GeminiClient
 from tldrist.clients.storage import ImageStorage
 from tldrist.clients.tts import TTSClient
+from tldrist.config import PODCAST_WORD_RANGE
 from tldrist.services.summarizer import ProcessedArticle
 from tldrist.utils.logging import get_logger
 
@@ -21,7 +22,7 @@ Guidelines:
 - Cover all articles, spending more time on the most interesting ones
 - Start with a brief intro welcoming listeners to the weekly digest
 - End with a sign-off thanking listeners and encouraging them to check out the articles
-- Total length: 800-1200 words (approximately 6-8 minutes when spoken)
+- Total length: """ + f"{PODCAST_WORD_RANGE[0]}-{PODCAST_WORD_RANGE[1]} words (approximately {PODCAST_WORD_RANGE[0] // 100}-{PODCAST_WORD_RANGE[1] // 100} minutes when spoken)" + """
 - Format each line as: [ALEX]: text here  or  [SAM]: text here
 - Do not include any stage directions or non-spoken text
 
