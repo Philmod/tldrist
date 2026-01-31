@@ -86,6 +86,14 @@ resource "google_cloud_run_v2_service" "tldrist" {
         value = google_storage_bucket.images.name
       }
       env {
+        name  = "TLDRIST_PODCAST_WORD_MIN"
+        value = "1600"
+      }
+      env {
+        name  = "TLDRIST_PODCAST_WORD_MAX"
+        value = "2400"
+      }
+      env {
         name = "TLDRIST_TODOIST_TOKEN"
         value_source {
           secret_key_ref {

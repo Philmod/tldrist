@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     dry_run: bool = Field(default=False, description="Run without sending email or updating tasks")
     skip_auth: bool = Field(default=False, description="Skip OIDC auth (local testing only)")
 
+    # Prompt length settings
+    podcast_word_min: int = Field(default=800, description="Podcast script minimum word count")
+    podcast_word_max: int = Field(default=1200, description="Podcast script maximum word count")
+    summary_paragraphs: str = Field(default="2-4", description="Target paragraph range for summaries")
+
     @field_validator("gcp_project_id")
     @classmethod
     def validate_project_id(cls, v: str) -> str:
