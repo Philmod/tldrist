@@ -1,10 +1,11 @@
 """Unit tests for Article fetcher."""
 
+import httpx
 import pytest
 import respx
 from httpx import Response
 
-from tldrist.clients.article import Article, ArticleFetcher
+from tldrist.clients.article import Article, ArticleFetcher, FetchError
 
 
 class TestArticle:
@@ -68,32 +69,41 @@ class TestArticleFetcher:
         await fetcher.close()
 
     @respx.mock
-    async def test_fetch_404(self, fetcher: ArticleFetcher) -> None:
-        """Should return None on 404."""
+    async def test_fetch_403_raises_fetch_error(self, fetcher: ArticleFetcher) -> None:
+        """Should raise FetchError with HTTP 403 reason on 403."""
+        respx.get("https://example.com/blocked").mock(
+            return_value=Response(403)
+        )
+
+        with pytest.raises(FetchError, match="HTTP 403"):
+            await fetcher.fetch("https://example.com/blocked")
+        await fetcher.close()
+
+    @respx.mock
+    async def test_fetch_404_raises_fetch_error(self, fetcher: ArticleFetcher) -> None:
+        """Should raise FetchError on 404."""
         respx.get("https://example.com/missing").mock(
             return_value=Response(404)
         )
 
-        article = await fetcher.fetch("https://example.com/missing")
-        assert article is None
+        with pytest.raises(FetchError, match="HTTP 404"):
+            await fetcher.fetch("https://example.com/missing")
         await fetcher.close()
 
     @respx.mock
-    async def test_fetch_timeout(self, fetcher: ArticleFetcher) -> None:
-        """Should return None on timeout."""
-        import httpx
-
+    async def test_fetch_timeout_raises_fetch_error(self, fetcher: ArticleFetcher) -> None:
+        """Should raise FetchError on timeout."""
         respx.get("https://example.com/slow").mock(
             side_effect=httpx.TimeoutException("timeout")
         )
 
-        article = await fetcher.fetch("https://example.com/slow")
-        assert article is None
+        with pytest.raises(FetchError, match="timeout"):
+            await fetcher.fetch("https://example.com/slow")
         await fetcher.close()
 
     @respx.mock
-    async def test_fetch_short_content(self, fetcher: ArticleFetcher) -> None:
-        """Should return None when content is too short."""
+    async def test_fetch_short_content_raises_fetch_error(self, fetcher: ArticleFetcher) -> None:
+        """Should raise FetchError when content extraction fails."""
         html = """
         <!DOCTYPE html>
         <html><body><p>Too short.</p></body></html>
@@ -102,6 +112,6 @@ class TestArticleFetcher:
             return_value=Response(200, text=html)
         )
 
-        article = await fetcher.fetch("https://example.com/short")
-        assert article is None
+        with pytest.raises(FetchError, match="content extraction failed"):
+            await fetcher.fetch("https://example.com/short")
         await fetcher.close()

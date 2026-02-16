@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 from tldrist.clients.gemini import ArticleSummary, GeminiClient
 from tldrist.clients.storage import ImageStorage
+from tldrist.models import FailedArticle
 from tldrist.services.summarizer import ProcessedArticle
 from tldrist.utils.logging import get_logger
 
@@ -25,6 +26,7 @@ class DigestService:
         articles: list[ProcessedArticle],
         podcast_url: str | None = None,
         web_page_url: str | None = None,
+        failed_articles: list[FailedArticle] | None = None,
     ) -> tuple[str, str]:
         """Compose the weekly digest email.
 
@@ -32,6 +34,7 @@ class DigestService:
             articles: List of processed articles to include.
             podcast_url: Optional URL to the podcast audio file.
             web_page_url: Optional URL to the web page version of the digest.
+            failed_articles: Optional list of articles that failed to fetch.
 
         Returns:
             Tuple of (subject, html_content).
@@ -43,10 +46,15 @@ class DigestService:
             article_count=len(articles),
             has_podcast=has_podcast,
             has_web_page=has_web_page,
+            failed_count=len(failed_articles) if failed_articles else 0,
         )
 
+        subject = self._generate_subject()
+
         if not articles:
-            return self._empty_digest()
+            digest_html = self._render_empty_html(failed_articles)
+            logger.info("Digest composed (empty)", subject=subject)
+            return subject, digest_html
 
         summaries = [
             ArticleSummary(url=a.url, title=a.title, summary=a.summary)
@@ -54,30 +62,54 @@ class DigestService:
         ]
 
         intro = await self._gemini.generate_digest_intro(summaries)
-        subject = self._generate_subject()
-        html = self._render_html(intro, articles, podcast_url, web_page_url)
+        digest_html = self._render_html(
+            intro, articles, podcast_url, web_page_url, failed_articles
+        )
 
         logger.info("Digest composed", subject=subject)
-        return subject, html
+        return subject, digest_html
 
-    def _empty_digest(self) -> tuple[str, str]:
-        """Generate an empty digest when there are no articles."""
-        subject = self._generate_subject()
-        html = """<!DOCTYPE html>
+    def _generate_subject(self) -> str:
+        """Generate the email subject line."""
+        date_str = datetime.now(UTC).strftime("%B %d, %Y")
+        return f"tl;drist reading digest - {date_str}"
+
+    def _render_empty_html(
+        self,
+        failed_articles: list[FailedArticle] | None = None,
+    ) -> str:
+        """Generate an empty digest when there are no successful articles."""
+        failures_html = self._render_failures_footnote(failed_articles)
+        return f"""<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
 <h1 style="color: #333;">tl;drist reading digest</h1>
 <p>No articles were found in your Read list this week.</p>
 <p>Add some articles to your Todoist "Read" project to receive summaries next week!</p>
+{failures_html}
 </body>
 </html>"""
-        return subject, html
 
-    def _generate_subject(self) -> str:
-        """Generate the email subject line."""
-        date_str = datetime.now(UTC).strftime("%B %d, %Y")
-        return f"tl;drist reading digest - {date_str}"
+    def _render_failures_footnote(
+        self,
+        failed_articles: list[FailedArticle] | None = None,
+    ) -> str:
+        """Render a footnote section listing failed articles and their reasons."""
+        if not failed_articles:
+            return ""
+
+        items = "\n".join(
+            f'<li><a href="{html.escape(fa.url)}">{html.escape(fa.url)}</a> '
+            f"&mdash; {html.escape(fa.reason)}</li>"
+            for fa in failed_articles
+        )
+        return f"""<div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #e0e0e0; font-size: 0.85em; color: #888;">
+<p><strong>Failed to fetch ({len(failed_articles)}):</strong></p>
+<ul style="padding-left: 20px;">
+{items}
+</ul>
+</div>"""
 
     def _render_html(
         self,
@@ -85,6 +117,7 @@ class DigestService:
         articles: list[ProcessedArticle],
         podcast_url: str | None = None,
         web_page_url: str | None = None,
+        failed_articles: list[FailedArticle] | None = None,
     ) -> str:
         """Render the digest as HTML."""
         # Escape intro text from LLM to prevent XSS
@@ -105,6 +138,8 @@ class DigestService:
             web_page_html = f"""<div class="web-version">
 <a href="{safe_web_url}">View this digest in your browser</a>
 </div>"""
+
+        failures_html = self._render_failures_footnote(failed_articles)
 
         return f"""<!DOCTYPE html>
 <html>
@@ -246,6 +281,8 @@ p {{
 <h2>This Week's Articles</h2>
 
 {articles_html}
+
+{failures_html}
 
 <div class="footer">
 <p>This digest was generated by TL;DRist using AI summarization.</p>

@@ -6,12 +6,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from tldrist.clients.article import ArticleFetcher, is_arxiv_url
+from tldrist.clients.article import ArticleFetcher, FetchError, is_arxiv_url
 from tldrist.clients.gemini import ArticleSummary, GeminiClient
 from tldrist.clients.gmail import GmailClient
 from tldrist.clients.storage import ImageStorage
 from tldrist.clients.todoist import TodoistClient, TodoistTask
 from tldrist.clients.tts import TTSClient
+from tldrist.models import FailedArticle
 from tldrist.services.digest import DigestService
 from tldrist.services.podcast import PodcastService
 from tldrist.services.summarizer import ProcessedArticle, SummarizerService
@@ -78,7 +79,8 @@ class Orchestrator:
             dry_run: If True, skip sending email and updating Todoist tasks.
             min: Minimum number of articles required to proceed. If there are fewer
                 articles available, the workflow is skipped and no email is sent.
-            max: Maximum number of articles to process. If None, process all.
+            max: Maximum number of articles to include in the digest. All articles
+                are fetched and summarized; only the first `max` successes are kept.
 
         Returns:
             OrchestrationResult with statistics about the run.
@@ -116,11 +118,6 @@ class Orchestrator:
                 skipped=True,
             )
 
-        # Apply max limit if specified
-        if max is not None:
-            tasks_with_urls = tasks_with_urls[:max]
-            logger.info("Applied max limit", max=max, tasks_to_process=len(tasks_with_urls))
-
         if not tasks_with_urls:
             logger.info("No tasks with URLs found, sending empty digest")
             subject, html = await self._digest.compose_digest([])
@@ -143,28 +140,32 @@ class Orchestrator:
                 dry_run=dry_run,
             )
 
-        # Process articles concurrently
+        # Process all articles concurrently
         processed_articles: list[ProcessedArticle] = []
-        failed_count = 0
+        failed_articles: list[FailedArticle] = []
 
         results = await asyncio.gather(
             *[self._process_task(task) for task in tasks_with_urls],
             return_exceptions=True,
         )
 
-        for result in results:
+        for task, result in zip(tasks_with_urls, results):
             if isinstance(result, BaseException):
-                logger.error("Task processing failed", error=str(result))
-                failed_count += 1
-            elif result is None:
-                failed_count += 1
+                logger.error("Task processing failed", task_id=task.id, url=task.url, error=str(result))
+                failed_articles.append(FailedArticle(url=task.url or "", reason=str(result)))
+            elif isinstance(result, FailedArticle):
+                failed_articles.append(result)
             elif isinstance(result, ProcessedArticle):
                 processed_articles.append(result)
+
+        # Apply max limit to successful results
+        if max is not None:
+            processed_articles = processed_articles[:max]
 
         logger.info(
             "Article processing complete",
             processed=len(processed_articles),
-            failed=failed_count,
+            failed=len(failed_articles),
         )
 
         # Generate podcast if enabled and we have articles
@@ -209,7 +210,7 @@ class Orchestrator:
 
         # Compose and send digest
         subject, html = await self._digest.compose_digest(
-            processed_articles, podcast_url, web_page_url
+            processed_articles, podcast_url, web_page_url, failed_articles
         )
 
         tasks_updated = 0
@@ -241,7 +242,7 @@ class Orchestrator:
         return OrchestrationResult(
             tasks_found=len(tasks_with_urls),
             articles_processed=len(processed_articles),
-            articles_failed=failed_count,
+            articles_failed=len(failed_articles),
             tasks_updated=tasks_updated,
             tasks_update_failed=tasks_update_failed,
             tasks_closed=tasks_closed,
@@ -251,10 +252,12 @@ class Orchestrator:
             podcast_url=podcast_url,
         )
 
-    async def _process_task(self, task: TodoistTask) -> ProcessedArticle | None:
+    async def _process_task(
+        self, task: TodoistTask
+    ) -> ProcessedArticle | FailedArticle:
         """Process a single task by fetching and summarizing its article."""
         if task.url is None:
-            return None
+            return FailedArticle(url="", reason="no URL")
 
         logger.info("Processing task", task_id=task.id, url=task.url)
 
@@ -262,26 +265,38 @@ class Orchestrator:
         if is_arxiv_url(task.url):
             return await self._process_arxiv_task(task)
 
-        article = await self._fetcher.fetch(task.url)
-        if article is None:
-            logger.warning("Failed to fetch article", task_id=task.id, url=task.url)
-            return None
+        try:
+            article = await self._fetcher.fetch(task.url)
+        except FetchError as e:
+            logger.warning("Failed to fetch article", task_id=task.id, url=task.url, reason=e.reason)
+            return FailedArticle(url=task.url, reason=e.reason)
 
-        return await self._summarizer.summarize(task.id, article)
+        try:
+            return await self._summarizer.summarize(task.id, article)
+        except Exception as e:
+            logger.warning("Failed to summarize article", task_id=task.id, url=task.url, error=str(e))
+            return FailedArticle(url=task.url, reason=f"summarization failed: {e}")
 
-    async def _process_arxiv_task(self, task: TodoistTask) -> ProcessedArticle | None:
+    async def _process_arxiv_task(
+        self, task: TodoistTask
+    ) -> ProcessedArticle | FailedArticle:
         """Process an arXiv task by fetching PDF and summarizing with Gemini."""
         if task.url is None:
-            return None
+            return FailedArticle(url="", reason="no URL")
 
         logger.info("Processing arXiv task", task_id=task.id, url=task.url)
 
-        arxiv_content = await self._fetcher.fetch_arxiv(task.url)
-        if arxiv_content is None:
-            logger.warning("Failed to fetch arXiv paper", task_id=task.id, url=task.url)
-            return None
+        try:
+            arxiv_content = await self._fetcher.fetch_arxiv(task.url)
+        except FetchError as e:
+            logger.warning("Failed to fetch arXiv paper", task_id=task.id, url=task.url, reason=e.reason)
+            return FailedArticle(url=task.url, reason=e.reason)
 
-        return await self._summarizer.summarize_arxiv(task.id, arxiv_content)
+        try:
+            return await self._summarizer.summarize_arxiv(task.id, arxiv_content)
+        except Exception as e:
+            logger.warning("Failed to summarize arXiv paper", task_id=task.id, url=task.url, error=str(e))
+            return FailedArticle(url=task.url, reason=f"summarization failed: {e}")
 
     async def _update_and_close_tasks(
         self, articles: list[ProcessedArticle]

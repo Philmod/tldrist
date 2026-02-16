@@ -11,6 +11,14 @@ from tldrist.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+
+class FetchError(Exception):
+    """Raised when an article cannot be fetched or its content extracted."""
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+        super().__init__(reason)
+
 # ArXiv URL patterns
 ARXIV_ABS_PATTERN = re.compile(r"https?://arxiv\.org/abs/(\d+\.\d+(?:v\d+)?)")
 ARXIV_PDF_PATTERN = re.compile(r"https?://arxiv\.org/pdf/(\d+\.\d+(?:v\d+)?)")
@@ -79,8 +87,9 @@ class ArticleFetcher:
             follow_redirects=True,
             headers={
                 "User-Agent": (
-                    "Mozilla/5.0 (compatible; TLDRist/1.0; "
-                    "+https://github.com/philmod/tldrist)"
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/131.0.0.0 Safari/537.36"
                 ),
             },
         )
@@ -95,54 +104,54 @@ class ArticleFetcher:
     async def __aexit__(self, *args: object) -> None:
         await self.close()
 
-    async def fetch(self, url: str) -> Article | None:
+    async def fetch(self, url: str) -> Article:
         """Fetch and extract content from a URL.
 
         Args:
             url: The URL to fetch.
 
         Returns:
-            An Article object if extraction succeeds, None otherwise.
+            An Article object if extraction succeeds.
+
+        Raises:
+            FetchError: If the article cannot be fetched or content extraction fails.
         """
         logger.info("Fetching article", url=url)
 
-        try:
-            html = await self._fetch_html(url)
-            if html is None:
-                return None
+        html = await self._fetch_html(url)
 
-            article = self._extract_content(url, html)
-            if article and article.is_valid:
-                logger.info(
-                    "Article extracted",
-                    url=url,
-                    title=article.title,
-                    word_count=article.word_count,
-                )
-                return article
+        article = self._extract_content(url, html)
+        if article and article.is_valid:
+            logger.info(
+                "Article extracted",
+                url=url,
+                title=article.title,
+                word_count=article.word_count,
+            )
+            return article
 
-            logger.warning("Article extraction failed or content too short", url=url)
-            return None
+        logger.warning("Article extraction failed or content too short", url=url)
+        raise FetchError("content extraction failed")
 
-        except Exception as e:
-            logger.error("Failed to fetch article", url=url, error=str(e))
-            return None
+    async def _fetch_html(self, url: str) -> str:
+        """Fetch HTML content from a URL.
 
-    async def _fetch_html(self, url: str) -> str | None:
-        """Fetch HTML content from a URL."""
+        Raises:
+            FetchError: If the HTTP request fails.
+        """
         try:
             response = await self._client.get(url)
             response.raise_for_status()
             return response.text
         except httpx.HTTPStatusError as e:
             logger.warning("HTTP error fetching URL", url=url, status=e.response.status_code)
-            return None
-        except httpx.TimeoutException:
+            raise FetchError(f"HTTP {e.response.status_code}") from e
+        except httpx.TimeoutException as e:
             logger.warning("Timeout fetching URL", url=url)
-            return None
+            raise FetchError("timeout") from e
         except httpx.RequestError as e:
             logger.warning("Request error fetching URL", url=url, error=str(e))
-            return None
+            raise FetchError(f"request error: {e}") from e
 
     def _extract_content(self, url: str, html: str) -> Article | None:
         """Extract article content from HTML.
@@ -183,14 +192,17 @@ class ArticleFetcher:
             logger.debug("Readability extraction failed", error=str(e))
             return "", fallback_title
 
-    async def fetch_arxiv(self, url: str) -> ArxivContent | None:
+    async def fetch_arxiv(self, url: str) -> ArxivContent:
         """Fetch an arXiv paper as PDF.
 
         Args:
             url: The arXiv abstract or PDF URL.
 
         Returns:
-            An ArxivContent object if successful, None otherwise.
+            An ArxivContent object if successful.
+
+        Raises:
+            FetchError: If the paper cannot be fetched.
         """
         logger.info("Fetching arXiv paper", url=url)
 
@@ -218,7 +230,7 @@ class ArticleFetcher:
 
             if "application/pdf" not in pdf_response.headers.get("content-type", ""):
                 logger.warning("Response is not a PDF", url=pdf_url)
-                return None
+                raise FetchError("response is not a PDF")
 
             pdf_bytes = pdf_response.content
 
@@ -236,15 +248,17 @@ class ArticleFetcher:
                 pdf_bytes=pdf_bytes,
             )
 
+        except FetchError:
+            raise
         except httpx.HTTPStatusError as e:
             logger.warning("HTTP error fetching arXiv", url=url, status=e.response.status_code)
-            return None
-        except httpx.TimeoutException:
+            raise FetchError(f"HTTP {e.response.status_code}") from e
+        except httpx.TimeoutException as e:
             logger.warning("Timeout fetching arXiv", url=url)
-            return None
+            raise FetchError("timeout") from e
         except httpx.RequestError as e:
             logger.warning("Request error fetching arXiv", url=url, error=str(e))
-            return None
+            raise FetchError(f"request error: {e}") from e
         except Exception as e:
             logger.error("Failed to fetch arXiv paper", url=url, error=str(e))
-            return None
+            raise FetchError(str(e)) from e
