@@ -2,6 +2,7 @@
 
 import re
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 import httpx
 import trafilatura
@@ -21,7 +22,8 @@ class FetchError(Exception):
 
 def is_nyt_url(url: str) -> bool:
     """Check if a URL is a New York Times article."""
-    return "nytimes.com" in url
+    hostname = urlparse(url).hostname or ""
+    return hostname == "nytimes.com" or hostname.endswith(".nytimes.com")
 
 
 # ArXiv URL patterns

@@ -130,7 +130,10 @@ class TestIsNytUrl:
         assert is_nyt_url("https://example.com/article") is False
 
     def test_nyt_substring_not_in_domain(self) -> None:
-        assert is_nyt_url("https://notnytimes.com/article") is True  # contains "nytimes.com"
+        assert is_nyt_url("https://notnytimes.com/article") is False
+
+    def test_nyt_in_path_not_in_domain(self) -> None:
+        assert is_nyt_url("https://evil.com/nytimes.com") is False
 
 
 class TestArticleFetcherNytCookies:
