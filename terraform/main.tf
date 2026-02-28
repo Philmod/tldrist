@@ -111,6 +111,24 @@ resource "google_cloud_run_v2_service" "tldrist" {
           }
         }
       }
+      env {
+        name = "TLDRIST_NYT_EMAIL"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.nyt_email.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "TLDRIST_NYT_PASSWORD"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.nyt_password.secret_id
+            version = "latest"
+          }
+        }
+      }
       resources {
         limits = {
           cpu    = "1"
@@ -141,6 +159,8 @@ resource "google_cloud_run_v2_service" "tldrist" {
     google_project_service.apis,
     google_secret_manager_secret_iam_member.todoist_token,
     google_secret_manager_secret_iam_member.gmail_app_password,
+    google_secret_manager_secret_iam_member.nyt_email,
+    google_secret_manager_secret_iam_member.nyt_password,
     google_storage_bucket.images,
   ]
 }
