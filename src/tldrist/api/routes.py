@@ -6,7 +6,6 @@ from tldrist import __version__
 from tldrist.api.auth import verify_oidc_token
 from tldrist.api.models import HealthResponse, SummarizeResponse
 from tldrist.clients.article import ArticleFetcher
-from tldrist.clients.nyt import NytAuthError, NytClient
 from tldrist.clients.gemini import GeminiClient
 from tldrist.clients.gmail import GmailClient
 from tldrist.clients.storage import ImageStorage
@@ -76,16 +75,8 @@ async def summarize(
 
     settings = get_settings()
 
-    nyt_cookies = None
-    if settings.nyt_configured:
-        try:
-            async with NytClient(settings.nyt_email, settings.nyt_password) as nyt:
-                nyt_cookies = await nyt.get_cookies()
-        except NytAuthError:
-            logger.warning("NYT login failed, proceeding without NYT auth")
-
     async with TodoistClient(settings.todoist_token) as todoist:
-        async with ArticleFetcher(nyt_cookies=nyt_cookies) as fetcher:
+        async with ArticleFetcher() as fetcher:
             async with GeminiClient(
                 project_id=settings.gcp_project_id,
                 region=settings.gcp_region,

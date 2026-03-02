@@ -2,7 +2,6 @@
 
 import re
 from dataclasses import dataclass
-from urllib.parse import urlparse
 
 import httpx
 import trafilatura
@@ -19,12 +18,6 @@ class FetchError(Exception):
     def __init__(self, reason: str) -> None:
         self.reason = reason
         super().__init__(reason)
-
-def is_nyt_url(url: str) -> bool:
-    """Check if a URL is a New York Times article."""
-    hostname = urlparse(url).hostname or ""
-    return hostname == "nytimes.com" or hostname.endswith(".nytimes.com")
-
 
 # ArXiv URL patterns
 ARXIV_ABS_PATTERN = re.compile(r"https?://arxiv\.org/abs/(\d+\.\d+(?:v\d+)?)")
@@ -87,13 +80,8 @@ class Article:
 class ArticleFetcher:
     """Fetches and extracts content from article URLs."""
 
-    def __init__(
-        self,
-        timeout: float = 30.0,
-        nyt_cookies: httpx.Cookies | None = None,
-    ) -> None:
+    def __init__(self, timeout: float = 30.0) -> None:
         self._timeout = timeout
-        self._nyt_cookies = nyt_cookies
         self._client = httpx.AsyncClient(
             timeout=timeout,
             follow_redirects=True,
@@ -152,13 +140,7 @@ class ArticleFetcher:
             FetchError: If the HTTP request fails.
         """
         try:
-            headers = {}
-            if self._nyt_cookies and is_nyt_url(url):
-                cookie_header = "; ".join(
-                    f"{name}={value}" for name, value in self._nyt_cookies.items()
-                )
-                headers["cookie"] = cookie_header
-            response = await self._client.get(url, headers=headers)
+            response = await self._client.get(url)
             response.raise_for_status()
             return response.text
         except httpx.HTTPStatusError as e:

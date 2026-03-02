@@ -33,10 +33,6 @@ class Settings(BaseSettings):
     todoist_token: str = Field(description="Todoist API token")
     gmail_app_password: str = Field(description="Gmail App Password")
 
-    # NYT subscriber credentials (optional - enables fetching paywalled NYT articles)
-    nyt_email: str | None = Field(default=None, description="NYT subscriber email")
-    nyt_password: str | None = Field(default=None, description="NYT subscriber password")
-
     # Application settings
     log_level: str = Field(default="INFO", description="Logging level")
     dry_run: bool = Field(default=False, description="Run without sending email or updating tasks")
@@ -46,19 +42,6 @@ class Settings(BaseSettings):
     podcast_word_min: int = Field(default=800, description="Podcast script minimum word count")
     podcast_word_max: int = Field(default=1200, description="Podcast script maximum word count")
     summary_paragraphs: str = Field(default="2-4", description="Target paragraph range for summaries")
-
-    @field_validator("nyt_email", "nyt_password", mode="before")
-    @classmethod
-    def empty_str_to_none(cls, v: str | None) -> str | None:
-        """Treat empty strings as None (Cloud Run injects '' for empty secrets)."""
-        if isinstance(v, str) and not v.strip():
-            return None
-        return v
-
-    @property
-    def nyt_configured(self) -> bool:
-        """Return True when both NYT credentials are set."""
-        return self.nyt_email is not None and self.nyt_password is not None
 
     @field_validator("gcp_project_id")
     @classmethod
