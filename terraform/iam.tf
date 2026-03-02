@@ -29,18 +29,6 @@ resource "google_secret_manager_secret_iam_member" "gmail_app_password" {
   member    = "serviceAccount:${google_service_account.tldrist.email}"
 }
 
-resource "google_secret_manager_secret_iam_member" "nyt_email" {
-  secret_id = google_secret_manager_secret.nyt_email.id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.tldrist.email}"
-}
-
-resource "google_secret_manager_secret_iam_member" "nyt_password" {
-  secret_id = google_secret_manager_secret.nyt_password.id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.tldrist.email}"
-}
-
 # Allow tldrist service account to use Vertex AI
 resource "google_project_iam_member" "tldrist_aiplatform" {
   project = var.project_id
