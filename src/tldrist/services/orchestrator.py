@@ -168,6 +168,22 @@ class Orchestrator:
             failed=len(failed_articles),
         )
 
+        # Skip email if all articles failed
+        if not processed_articles:
+            logger.info("No successful summaries, skipping email")
+            return OrchestrationResult(
+                tasks_found=len(tasks_with_urls),
+                articles_processed=0,
+                articles_failed=len(failed_articles),
+                tasks_updated=0,
+                tasks_update_failed=0,
+                tasks_closed=0,
+                tasks_close_failed=0,
+                email_sent=False,
+                dry_run=dry_run,
+                skipped=True,
+            )
+
         # Generate podcast if enabled and we have articles
         podcast_url = None
         if (
