@@ -33,6 +33,8 @@ class TestOrchestratorMaxLimit:
     def orchestrator(self) -> Orchestrator:
         todoist = MagicMock()
         todoist.get_tasks = AsyncMock(return_value=[])
+        todoist.get_comments = AsyncMock(return_value=[])
+        todoist.add_comment = AsyncMock()
         fetcher = MagicMock()
         gemini = MagicMock()
         gmail = MagicMock()
@@ -90,6 +92,8 @@ class TestOrchestratorFailedArticles:
     def orchestrator(self) -> Orchestrator:
         todoist = MagicMock()
         todoist.get_tasks = AsyncMock(return_value=[])
+        todoist.get_comments = AsyncMock(return_value=[])
+        todoist.add_comment = AsyncMock()
         fetcher = MagicMock()
         gemini = MagicMock()
         gmail = MagicMock()
@@ -104,7 +108,7 @@ class TestOrchestratorFailedArticles:
         )
 
     async def test_all_articles_fail_collects_reasons(self, orchestrator: Orchestrator) -> None:
-        """When all articles fail, failed articles are collected with reasons."""
+        """When all articles fail, result should reflect failures and skip email."""
         tasks = [
             _make_task("1", "https://nyt.com/article"),
             _make_task("2", "https://ibm.com/article"),
@@ -123,18 +127,14 @@ class TestOrchestratorFailedArticles:
 
         assert result.articles_processed == 0
         assert result.articles_failed == 2
+        assert result.skipped is True
+        # compose_digest is not called when all articles fail
+        orchestrator._digest.compose_digest.assert_not_called()
 
-        # Verify failed_articles were passed to compose_digest
-        call_args = orchestrator._digest.compose_digest.call_args
-        failed = call_args.kwargs.get("failed_articles") or call_args[0][3]
-        assert len(failed) == 2
-        assert any(fa.reason == "HTTP 403" for fa in failed)
-        assert any(fa.reason == "content extraction failed" for fa in failed)
-
-    async def test_failed_articles_passed_to_compose_digest(
+    async def test_single_failure_skips_email(
         self, orchestrator: Orchestrator
     ) -> None:
-        """Failed articles list should be passed as the 4th positional arg to compose_digest."""
+        """A single failed article (with no successes) should skip email."""
         tasks = [_make_task("1", "https://example.com/fail")]
         orchestrator._todoist.get_tasks = AsyncMock(return_value=tasks)
 
@@ -144,13 +144,11 @@ class TestOrchestratorFailedArticles:
         orchestrator._fetcher.fetch = mock_fetch
         orchestrator._digest.compose_digest = AsyncMock(return_value=("subject", "<html>"))
 
-        await orchestrator.run(dry_run=True)
+        result = await orchestrator.run(dry_run=True)
 
-        call_args = orchestrator._digest.compose_digest.call_args
-        failed = call_args.kwargs.get("failed_articles") or call_args[0][3]
-        assert len(failed) == 1
-        assert failed[0].url == "https://example.com/fail"
-        assert failed[0].reason == "timeout"
+        assert result.articles_failed == 1
+        assert result.skipped is True
+        orchestrator._digest.compose_digest.assert_not_called()
 
     async def test_task_without_url_returns_failed_article(
         self, orchestrator: Orchestrator
@@ -178,12 +176,7 @@ class TestOrchestratorFailedArticles:
 
         assert result.articles_processed == 0
         assert result.articles_failed == 1
-
-        call_args = orchestrator._digest.compose_digest.call_args
-        failed = call_args.kwargs.get("failed_articles") or call_args[0][3]
-        assert len(failed) == 1
-        assert failed[0].url == "https://example.com/crash"
-        assert "unexpected crash" in failed[0].reason
+        assert result.skipped is True
 
     async def test_summarizer_failure_returns_failed_article(
         self, orchestrator: Orchestrator
@@ -204,8 +197,139 @@ class TestOrchestratorFailedArticles:
 
         assert result.articles_processed == 0
         assert result.articles_failed == 1
+        assert result.skipped is True
 
-        call_args = orchestrator._digest.compose_digest.call_args
-        failed = call_args.kwargs.get("failed_articles") or call_args[0][3]
-        assert len(failed) == 1
-        assert "summarization failed" in failed[0].reason
+
+class TestOrchestratorFailureComments:
+    """Tests that failure comments are added and previously failed tasks are skipped."""
+
+    @pytest.fixture
+    def orchestrator(self) -> Orchestrator:
+        todoist = MagicMock()
+        todoist.get_tasks = AsyncMock(return_value=[])
+        todoist.get_comments = AsyncMock(return_value=[])
+        todoist.add_comment = AsyncMock()
+        fetcher = MagicMock()
+        gemini = MagicMock()
+        gmail = MagicMock()
+        return Orchestrator(
+            todoist_client=todoist,
+            article_fetcher=fetcher,
+            gemini_client=gemini,
+            gmail_client=gmail,
+            recipient_email="test@example.com",
+            todoist_project_id="project-1",
+            podcast_enabled=False,
+        )
+
+    async def test_previously_failed_tasks_are_skipped(
+        self, orchestrator: Orchestrator
+    ) -> None:
+        """Tasks with an existing 'tldrist:' comment should be filtered out."""
+        tasks = [
+            _make_task("1", "https://example.com/good"),
+            _make_task("2", "https://example.com/bad"),
+        ]
+        orchestrator._todoist.get_tasks = AsyncMock(return_value=tasks)
+
+        # Task 2 has a failure comment from a previous run
+        async def mock_get_comments(task_id: str) -> list[dict]:
+            if task_id == "2":
+                return [{"content": "tldrist: HTTP 403"}]
+            return []
+
+        orchestrator._todoist.get_comments = AsyncMock(side_effect=mock_get_comments)
+
+        orchestrator._fetcher.fetch = AsyncMock(
+            return_value=MagicMock(url="https://example.com/good", content="c", word_count=100)
+        )
+        orchestrator._summarizer.summarize = AsyncMock(
+            side_effect=lambda tid, art: _make_processed(tid, art.url)
+        )
+        orchestrator._digest.compose_digest = AsyncMock(return_value=("subject", "<html>"))
+
+        result = await orchestrator.run(dry_run=True)
+
+        # Only task 1 should be processed
+        assert result.tasks_found == 1
+        assert result.articles_processed == 1
+        assert result.articles_failed == 0
+
+    async def test_all_tasks_previously_failed_skips_workflow(
+        self, orchestrator: Orchestrator
+    ) -> None:
+        """When all tasks have failure comments, workflow should skip (no email)."""
+        tasks = [
+            _make_task("1", "https://example.com/a"),
+            _make_task("2", "https://example.com/b"),
+        ]
+        orchestrator._todoist.get_tasks = AsyncMock(return_value=tasks)
+        orchestrator._todoist.get_comments = AsyncMock(
+            return_value=[{"content": "tldrist: content extraction failed"}]
+        )
+        orchestrator._digest.compose_digest = AsyncMock(return_value=("subject", "<html>"))
+
+        result = await orchestrator.run(dry_run=False)
+
+        assert result.tasks_found == 0
+        assert result.skipped is True
+        assert result.email_sent is False
+        orchestrator._digest.compose_digest.assert_not_called()
+
+    async def test_failure_comment_added_on_fetch_failure(
+        self, orchestrator: Orchestrator
+    ) -> None:
+        """When an article fails, a comment should be added to the Todoist task."""
+        tasks = [_make_task("1", "https://example.com/fail")]
+        orchestrator._todoist.get_tasks = AsyncMock(return_value=tasks)
+
+        async def mock_fetch(url: str):
+            raise FetchError("HTTP 403")
+
+        orchestrator._fetcher.fetch = mock_fetch
+        orchestrator._digest.compose_digest = AsyncMock(return_value=("subject", "<html>"))
+
+        await orchestrator.run(dry_run=False)
+
+        orchestrator._todoist.add_comment.assert_called_once_with(
+            "1", "tldrist: HTTP 403"
+        )
+
+    async def test_failure_comment_not_added_in_dry_run(
+        self, orchestrator: Orchestrator
+    ) -> None:
+        """Failure comments should NOT be added during dry runs."""
+        tasks = [_make_task("1", "https://example.com/fail")]
+        orchestrator._todoist.get_tasks = AsyncMock(return_value=tasks)
+
+        async def mock_fetch(url: str):
+            raise FetchError("HTTP 403")
+
+        orchestrator._fetcher.fetch = mock_fetch
+        orchestrator._digest.compose_digest = AsyncMock(return_value=("subject", "<html>"))
+
+        await orchestrator.run(dry_run=True)
+
+        orchestrator._todoist.add_comment.assert_not_called()
+
+    async def test_comment_check_failure_does_not_skip_task(
+        self, orchestrator: Orchestrator
+    ) -> None:
+        """If fetching comments fails, the task should still be processed."""
+        tasks = [_make_task("1", "https://example.com/article")]
+        orchestrator._todoist.get_tasks = AsyncMock(return_value=tasks)
+        orchestrator._todoist.get_comments = AsyncMock(
+            side_effect=RuntimeError("API error")
+        )
+
+        orchestrator._fetcher.fetch = AsyncMock(
+            return_value=MagicMock(url="https://example.com/article", content="c", word_count=100)
+        )
+        orchestrator._summarizer.summarize = AsyncMock(
+            side_effect=lambda tid, art: _make_processed(tid, art.url)
+        )
+        orchestrator._digest.compose_digest = AsyncMock(return_value=("subject", "<html>"))
+
+        result = await orchestrator.run(dry_run=True)
+
+        assert result.articles_processed == 1

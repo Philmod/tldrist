@@ -9,3 +9,4 @@ class FailedArticle:
 
     url: str
     reason: str
+    task_id: str | None = None

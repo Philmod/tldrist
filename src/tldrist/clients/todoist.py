@@ -107,3 +107,32 @@ class TodoistClient:
         response = await self._client.post(f"/tasks/{task_id}/close")
         response.raise_for_status()
         logger.info("Task closed", task_id=task_id)
+
+    async def get_comments(self, task_id: str) -> list[dict]:
+        """Get all comments for a task.
+
+        Args:
+            task_id: The ID of the task.
+
+        Returns:
+            List of comment dicts with at least a "content" key.
+        """
+        response = await self._client.get("/comments", params={"task_id": task_id})
+        response.raise_for_status()
+        data = response.json()
+        return data.get("results", [])
+
+    async def add_comment(self, task_id: str, content: str) -> None:
+        """Add a comment to a task.
+
+        Args:
+            task_id: The ID of the task.
+            content: The comment text.
+        """
+        logger.info("Adding comment to task", task_id=task_id)
+        response = await self._client.post(
+            "/comments",
+            json={"task_id": task_id, "content": content},
+        )
+        response.raise_for_status()
+        logger.info("Comment added to task", task_id=task_id)
