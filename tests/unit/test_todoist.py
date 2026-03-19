@@ -117,3 +117,41 @@ class TestTodoistClient:
 
         assert route.called
         await client.close()
+
+    @respx.mock
+    async def test_get_comments(self, client: TodoistClient) -> None:
+        """Should fetch comments for a task."""
+        respx.get("https://api.todoist.com/api/v1/comments").mock(
+            return_value=Response(
+                200,
+                json={
+                    "results": [
+                        {"id": "c1", "content": "user note"},
+                        {"id": "c2", "content": "tldrist: HTTP 403"},
+                    ],
+                },
+            )
+        )
+
+        comments = await client.get_comments("task-123")
+        assert len(comments) == 2
+        assert comments[1]["content"] == "tldrist: HTTP 403"
+        await client.close()
+
+    @respx.mock
+    async def test_add_comment(self, client: TodoistClient) -> None:
+        """Should add a comment to a task."""
+        import json
+
+        route = respx.post("https://api.todoist.com/api/v1/comments").mock(
+            return_value=Response(200, json={})
+        )
+
+        await client.add_comment("task-789", "tldrist: content extraction failed")
+
+        assert route.called
+        request = route.calls[0].request
+        body = json.loads(request.content)
+        assert body["task_id"] == "task-789"
+        assert body["content"] == "tldrist: content extraction failed"
+        await client.close()

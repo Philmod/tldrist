@@ -20,6 +20,8 @@ from tldrist.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+FAILURE_COMMENT_PREFIX = "tldrist: "
+
 
 @dataclass
 class OrchestrationResult:
@@ -98,6 +100,9 @@ class Orchestrator:
         tasks_with_urls = [t for t in tasks if t.url is not None]
         logger.info("Found tasks with URLs", count=len(tasks_with_urls))
 
+        # Filter out tasks that already have a failure comment from a previous run
+        tasks_with_urls = await self._filter_previously_failed(tasks_with_urls)
+
         # Check minimum threshold
         if min is not None and len(tasks_with_urls) < min:
             logger.info(
@@ -119,15 +124,7 @@ class Orchestrator:
             )
 
         if not tasks_with_urls:
-            logger.info("No tasks with URLs found, sending empty digest")
-            subject, html = await self._digest.compose_digest([])
-            if not dry_run:
-                self._gmail.send_email(self._recipient_email, subject, html)
-            else:
-                logger.info("Dry run - generated email subject", subject=subject)
-                html_path = self._write_dry_run_html(html)
-                logger.info("Dry run - HTML written to file", path=str(html_path))
-                print(f"Dry run HTML saved to: {html_path}")
+            logger.info("No tasks with URLs to process, skipping")
             return OrchestrationResult(
                 tasks_found=0,
                 articles_processed=0,
@@ -136,8 +133,9 @@ class Orchestrator:
                 tasks_update_failed=0,
                 tasks_closed=0,
                 tasks_close_failed=0,
-                email_sent=not dry_run,
+                email_sent=False,
                 dry_run=dry_run,
+                skipped=True,
             )
 
         # Process all articles concurrently
@@ -152,7 +150,9 @@ class Orchestrator:
         for task, result in zip(tasks_with_urls, results):
             if isinstance(result, BaseException):
                 logger.error("Task processing failed", task_id=task.id, url=task.url, error=str(result))
-                failed_articles.append(FailedArticle(url=task.url or "", reason=str(result)))
+                failed_articles.append(
+                    FailedArticle(url=task.url or "", reason=str(result), task_id=task.id)
+                )
             elif isinstance(result, FailedArticle):
                 failed_articles.append(result)
             elif isinstance(result, ProcessedArticle):
@@ -167,6 +167,10 @@ class Orchestrator:
             processed=len(processed_articles),
             failed=len(failed_articles),
         )
+
+        # Mark failed tasks in Todoist so they are skipped on subsequent runs
+        if not dry_run:
+            await self._add_failure_comments(failed_articles)
 
         # Skip email if all articles failed
         if not processed_articles:
@@ -273,7 +277,7 @@ class Orchestrator:
     ) -> ProcessedArticle | FailedArticle:
         """Process a single task by fetching and summarizing its article."""
         if task.url is None:
-            return FailedArticle(url="", reason="no URL")
+            return FailedArticle(url="", reason="no URL", task_id=task.id)
 
         logger.info("Processing task", task_id=task.id, url=task.url)
 
@@ -285,20 +289,20 @@ class Orchestrator:
             article = await self._fetcher.fetch(task.url)
         except FetchError as e:
             logger.warning("Failed to fetch article", task_id=task.id, url=task.url, reason=e.reason)
-            return FailedArticle(url=task.url, reason=e.reason)
+            return FailedArticle(url=task.url, reason=e.reason, task_id=task.id)
 
         try:
             return await self._summarizer.summarize(task.id, article)
         except Exception as e:
             logger.warning("Failed to summarize article", task_id=task.id, url=task.url, error=str(e))
-            return FailedArticle(url=task.url, reason=f"summarization failed: {e}")
+            return FailedArticle(url=task.url, reason=f"summarization failed: {e}", task_id=task.id)
 
     async def _process_arxiv_task(
         self, task: TodoistTask
     ) -> ProcessedArticle | FailedArticle:
         """Process an arXiv task by fetching PDF and summarizing with Gemini."""
         if task.url is None:
-            return FailedArticle(url="", reason="no URL")
+            return FailedArticle(url="", reason="no URL", task_id=task.id)
 
         logger.info("Processing arXiv task", task_id=task.id, url=task.url)
 
@@ -306,13 +310,79 @@ class Orchestrator:
             arxiv_content = await self._fetcher.fetch_arxiv(task.url)
         except FetchError as e:
             logger.warning("Failed to fetch arXiv paper", task_id=task.id, url=task.url, reason=e.reason)
-            return FailedArticle(url=task.url, reason=e.reason)
+            return FailedArticle(url=task.url, reason=e.reason, task_id=task.id)
 
         try:
             return await self._summarizer.summarize_arxiv(task.id, arxiv_content)
         except Exception as e:
             logger.warning("Failed to summarize arXiv paper", task_id=task.id, url=task.url, error=str(e))
-            return FailedArticle(url=task.url, reason=f"summarization failed: {e}")
+            return FailedArticle(url=task.url, reason=f"summarization failed: {e}", task_id=task.id)
+
+    async def _filter_previously_failed(
+        self, tasks: list[TodoistTask]
+    ) -> list[TodoistTask]:
+        """Filter out tasks that already have a failure comment from a previous run."""
+        if not tasks:
+            return tasks
+
+        comment_results = await asyncio.gather(
+            *[self._todoist.get_comments(task.id) for task in tasks],
+            return_exceptions=True,
+        )
+
+        filtered: list[TodoistTask] = []
+        for task, comments in zip(tasks, comment_results):
+            if isinstance(comments, BaseException):
+                logger.warning(
+                    "Failed to fetch comments, processing task anyway",
+                    task_id=task.id,
+                    error=str(comments),
+                )
+                filtered.append(task)
+                continue
+
+            has_failure = any(
+                c.get("content", "").startswith(FAILURE_COMMENT_PREFIX)
+                for c in comments
+            )
+            if has_failure:
+                logger.info(
+                    "Skipping previously failed task", task_id=task.id, url=task.url
+                )
+            else:
+                filtered.append(task)
+
+        skipped = len(tasks) - len(filtered)
+        if skipped:
+            logger.info("Filtered out previously failed tasks", skipped=skipped)
+        return filtered
+
+    async def _add_failure_comments(
+        self, failed_articles: list[FailedArticle]
+    ) -> None:
+        """Add failure comments to Todoist tasks so they are skipped on future runs."""
+        to_comment = [
+            (fa.task_id, fa.reason) for fa in failed_articles if fa.task_id is not None
+        ]
+        if not to_comment:
+            return
+
+        results = await asyncio.gather(
+            *[
+                self._todoist.add_comment(
+                    task_id, f"{FAILURE_COMMENT_PREFIX}{reason}"
+                )
+                for task_id, reason in to_comment
+            ],
+            return_exceptions=True,
+        )
+        for (task_id, _reason), result in zip(to_comment, results):
+            if isinstance(result, BaseException):
+                logger.error(
+                    "Failed to add failure comment",
+                    task_id=task_id,
+                    error=str(result),
+                )
 
     async def _update_and_close_tasks(
         self, articles: list[ProcessedArticle]
