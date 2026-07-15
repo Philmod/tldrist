@@ -295,6 +295,26 @@ class TestOrchestratorFailureComments:
             "1", "tldrist: HTTP 403"
         )
 
+    async def test_no_failure_comment_on_summarization_failure(
+        self, orchestrator: Orchestrator
+    ) -> None:
+        """Transient summarization failures must NOT add a comment (stay retryable)."""
+        tasks = [_make_task("1", "https://example.com/article")]
+        orchestrator._todoist.get_tasks = AsyncMock(return_value=tasks)
+
+        orchestrator._fetcher.fetch = AsyncMock(
+            return_value=MagicMock(url="https://example.com/article")
+        )
+        orchestrator._summarizer.summarize = AsyncMock(
+            side_effect=RuntimeError("404 Publisher model gemini-2.0-flash-001 was not found")
+        )
+        orchestrator._digest.compose_digest = AsyncMock(return_value=("subject", "<html>"))
+
+        result = await orchestrator.run(dry_run=False)
+
+        assert result.articles_failed == 1
+        orchestrator._todoist.add_comment.assert_not_called()
+
     async def test_failure_comment_not_added_in_dry_run(
         self, orchestrator: Orchestrator
     ) -> None:

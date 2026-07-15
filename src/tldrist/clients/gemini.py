@@ -89,8 +89,8 @@ class GeminiClient:
     def __init__(
         self,
         project_id: str,
-        region: str = "europe-west1",
-        model_name: str = "gemini-2.0-flash-001",
+        region: str = "global",
+        model_name: str = "gemini-3.5-flash",
     ) -> None:
         self._project_id = project_id
         self._region = region

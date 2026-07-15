@@ -289,7 +289,7 @@ class Orchestrator:
             article = await self._fetcher.fetch(task.url)
         except FetchError as e:
             logger.warning("Failed to fetch article", task_id=task.id, url=task.url, reason=e.reason)
-            return FailedArticle(url=task.url, reason=e.reason, task_id=task.id)
+            return FailedArticle(url=task.url, reason=e.reason, task_id=task.id, permanent=True)
 
         try:
             return await self._summarizer.summarize(task.id, article)
@@ -310,7 +310,7 @@ class Orchestrator:
             arxiv_content = await self._fetcher.fetch_arxiv(task.url)
         except FetchError as e:
             logger.warning("Failed to fetch arXiv paper", task_id=task.id, url=task.url, reason=e.reason)
-            return FailedArticle(url=task.url, reason=e.reason, task_id=task.id)
+            return FailedArticle(url=task.url, reason=e.reason, task_id=task.id, permanent=True)
 
         try:
             return await self._summarizer.summarize_arxiv(task.id, arxiv_content)
@@ -360,9 +360,15 @@ class Orchestrator:
     async def _add_failure_comments(
         self, failed_articles: list[FailedArticle]
     ) -> None:
-        """Add failure comments to Todoist tasks so they are skipped on future runs."""
+        """Add failure comments to Todoist tasks so they are skipped on future runs.
+
+        Only permanent (article-specific) failures are commented; transient ones
+        (e.g. summarization/infra errors) are retried on the next run.
+        """
         to_comment = [
-            (fa.task_id, fa.reason) for fa in failed_articles if fa.task_id is not None
+            (fa.task_id, fa.reason)
+            for fa in failed_articles
+            if fa.task_id is not None and fa.permanent
         ]
         if not to_comment:
             return

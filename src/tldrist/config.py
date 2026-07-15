@@ -22,6 +22,16 @@ class Settings(BaseSettings):
         default=None, description="GCS bucket for storing public images"
     )
 
+    # Gemini settings
+    gemini_model: str = Field(
+        default="gemini-3.5-flash", description="Vertex AI Gemini model ID"
+    )
+    # Newer Gemini models are not served from every region (gemini-3.5-flash is
+    # not available in europe-west1), so Gemini calls use their own location.
+    gemini_location: str = Field(
+        default="global", description="Vertex AI location for Gemini calls"
+    )
+
     # Todoist settings
     todoist_project_id: str = Field(description="ID of the Todoist project to process")
 
