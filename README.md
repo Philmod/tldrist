@@ -12,7 +12,7 @@ Daily digest of Todoist Read list articles summarized with Gemini.
 
 - Fetches articles from your Todoist "Read" project
 - Extracts content using trafilatura and readability-lxml
-- Generates summaries using Vertex AI Gemini 2.0 Flash
+- Generates summaries using Vertex AI Gemini 3.5 Flash
 - Supports arXiv papers with PDF summarization and figure extraction
 - Generates AI podcast conversations with Text-to-Speech audio
 - Creates a responsive HTML web page of the digest

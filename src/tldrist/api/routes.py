@@ -79,7 +79,8 @@ async def summarize(
         async with ArticleFetcher() as fetcher:
             async with GeminiClient(
                 project_id=settings.gcp_project_id,
-                region=settings.gcp_region,
+                region=settings.gemini_location,
+                model_name=settings.gemini_model,
             ) as gemini:
                 async with GmailClient(
                     gmail_address=settings.gmail_address,
