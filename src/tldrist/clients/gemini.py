@@ -3,8 +3,15 @@
 import json
 from dataclasses import dataclass
 
-import vertexai
-from vertexai.generative_models import GenerationConfig, GenerativeModel, Part
+from google import genai
+from google.genai.types import (
+    FinishReason,
+    GenerateContentConfig,
+    GenerateContentResponse,
+    Part,
+    ThinkingConfig,
+    ThinkingLevel,
+)
 
 from tldrist.config import get_settings
 from tldrist.utils.logging import get_logger
@@ -63,6 +70,28 @@ EXTRACT_FIGURE_PROMPT = (
     '"description": null, "reason": "No figures found"}'
 )
 
+# Summarization doesn't need deep reasoning, and thinking tokens share the
+# max_output_tokens budget: with thinking at MINIMAL the cap bounds visible
+# text again, so summary length is controlled by the prompt, not truncation.
+THINKING_CONFIG = ThinkingConfig(thinking_level=ThinkingLevel.MINIMAL)
+
+
+def _response_text(response: GenerateContentResponse) -> str:
+    """Extract text from a Gemini response, rejecting truncated output.
+
+    A response that hit max_output_tokens is cut off mid-sentence; raising
+    turns that into a retryable failure instead of shipping a cut-off summary.
+    """
+    candidates = response.candidates
+    if candidates and candidates[0].finish_reason == FinishReason.MAX_TOKENS:
+        raise RuntimeError(
+            "Model response truncated (hit max_output_tokens before finishing)"
+        )
+    text = response.text
+    if not text:
+        raise RuntimeError("Model returned empty response")
+    return text
+
 
 @dataclass
 class FigureInfo:
@@ -95,37 +124,56 @@ class GeminiClient:
         self._project_id = project_id
         self._region = region
         self._model_name = model_name
-        self._initialized = False
+        self._client: genai.Client | None = None
 
     async def __aenter__(self) -> "GeminiClient":
-        """Async context manager entry - initialize Vertex AI."""
-        self._ensure_initialized()
+        """Async context manager entry - initialize the client."""
+        self._get_client()
         return self
 
     async def __aexit__(self, exc_type: type | None, exc_val: BaseException | None, exc_tb: object) -> None:
-        """Async context manager exit - cleanup resources."""
-        # Vertex AI client doesn't have explicit cleanup, but this ensures
-        # the pattern is consistent and future-proof
-        pass
+        """Async context manager exit - close the underlying HTTP client."""
+        if self._client is not None:
+            await self._client.aio.aclose()
+            self._client = None
 
-    def _ensure_initialized(self) -> None:
-        """Initialize Vertex AI if not already done."""
-        if not self._initialized:
-            vertexai.init(project=self._project_id, location=self._region)
-            self._initialized = True
-            logger.info("Vertex AI initialized", project=self._project_id, region=self._region)
+    def _get_client(self) -> genai.Client:
+        """Get the Gemini client, creating it on first use."""
+        if self._client is None:
+            self._client = genai.Client(
+                vertexai=True, project=self._project_id, location=self._region
+            )
+            logger.info(
+                "Gemini client initialized", project=self._project_id, location=self._region
+            )
+        return self._client
 
-    def _get_model(self) -> GenerativeModel:
-        """Get the Gemini model instance."""
-        self._ensure_initialized()
-        return GenerativeModel(self._model_name)
+    async def _generate(
+        self,
+        contents: str | list[Part | str],
+        *,
+        temperature: float,
+        max_output_tokens: int,
+    ) -> str:
+        """Run a generation request and return the validated text."""
+        client = self._get_client()
+        response = await client.aio.models.generate_content(
+            model=self._model_name,
+            contents=contents,
+            config=GenerateContentConfig(
+                temperature=temperature,
+                max_output_tokens=max_output_tokens,
+                thinking_config=THINKING_CONFIG,
+            ),
+        )
+        return _response_text(response)
 
     async def generate_content(
         self,
         prompt: str,
         *,
         temperature: float = 0.3,
-        max_output_tokens: int = 1024,
+        max_output_tokens: int = 2048,
     ) -> str:
         """Generate content with custom parameters.
 
@@ -138,17 +186,11 @@ class GeminiClient:
             The generated text.
 
         Raises:
-            RuntimeError: If the model returns no content.
+            RuntimeError: If the model returns no content or truncated content.
         """
-        model = self._get_model()
-        config = GenerationConfig(
-            temperature=temperature,
-            max_output_tokens=max_output_tokens,
+        return await self._generate(
+            prompt, temperature=temperature, max_output_tokens=max_output_tokens
         )
-        response = await model.generate_content_async(prompt, generation_config=config)
-        if not response.text:
-            raise RuntimeError("Model returned empty response")
-        return response.text
 
     async def summarize_article(self, title: str, content: str) -> str:
         """Generate a summary for an article.
@@ -162,21 +204,13 @@ class GeminiClient:
         """
         logger.info("Summarizing article", title=title)
 
-        model = self._get_model()
         settings = get_settings()
         prompt = SUMMARIZE_PROMPT.format(
             title=title, content=content[:50000],
             summary_paragraphs=settings.summary_paragraphs,
         )
 
-        config = GenerationConfig(
-            temperature=0.3,
-            max_output_tokens=1024,
-        )
-
-        response = await model.generate_content_async(prompt, generation_config=config)
-
-        summary = response.text
+        summary = await self._generate(prompt, temperature=0.3, max_output_tokens=2048)
         logger.info("Article summarized", title=title, summary_length=len(summary))
         return summary
 
@@ -191,21 +225,12 @@ class GeminiClient:
         """
         logger.info("Generating digest introduction", article_count=len(summaries))
 
-        model = self._get_model()
-
         summaries_text = "\n\n".join(
             f"**{s.title}**\n{s.summary}" for s in summaries
         )
         prompt = DIGEST_PROMPT.format(summaries=summaries_text)
 
-        config = GenerationConfig(
-            temperature=0.5,
-            max_output_tokens=512,
-        )
-
-        response = await model.generate_content_async(prompt, generation_config=config)
-
-        intro = response.text
+        intro = await self._generate(prompt, temperature=0.5, max_output_tokens=1024)
         logger.info("Digest introduction generated", length=len(intro))
         return intro
 
@@ -221,25 +246,15 @@ class GeminiClient:
         """
         logger.info("Summarizing PDF", title=title, pdf_size=len(pdf_bytes))
 
-        model = self._get_model()
-
-        pdf_part = Part.from_data(data=pdf_bytes, mime_type="application/pdf")
+        pdf_part = Part.from_bytes(data=pdf_bytes, mime_type="application/pdf")
         settings = get_settings()
         prompt = SUMMARIZE_PDF_PROMPT.format(
             title=title, summary_paragraphs=settings.summary_paragraphs,
         )
 
-        config = GenerationConfig(
-            temperature=0.3,
-            max_output_tokens=2048,
+        summary = await self._generate(
+            [pdf_part, prompt], temperature=0.3, max_output_tokens=2048
         )
-
-        response = await model.generate_content_async(
-            [pdf_part, prompt],  # type: ignore[arg-type]
-            generation_config=config,
-        )
-
-        summary = response.text
         logger.info("PDF summarized", title=title, summary_length=len(summary))
         return summary
 
@@ -254,22 +269,16 @@ class GeminiClient:
         """
         logger.info("Identifying important figure", pdf_size=len(pdf_bytes))
 
-        model = self._get_model()
-
-        pdf_part = Part.from_data(data=pdf_bytes, mime_type="application/pdf")
-
-        config = GenerationConfig(
-            temperature=0.1,
-            max_output_tokens=512,
-        )
+        pdf_part = Part.from_bytes(data=pdf_bytes, mime_type="application/pdf")
 
         try:
-            response = await model.generate_content_async(
-                [pdf_part, EXTRACT_FIGURE_PROMPT],  # type: ignore[arg-type]
-                generation_config=config,
+            response_text = await self._generate(
+                [pdf_part, EXTRACT_FIGURE_PROMPT],
+                temperature=0.1,
+                max_output_tokens=1024,
             )
 
-            response_text = response.text.strip()
+            response_text = response_text.strip()
             # Handle potential markdown code blocks
             if response_text.startswith("```"):
                 lines = response_text.split("\n")
